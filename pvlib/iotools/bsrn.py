@@ -60,7 +60,7 @@ def _empty_dataframe_from_logical_records(logical_records):
     return pd.DataFrame(columns=columns)
 
 
-def get_bsrn(station, start, end, username, password,
+def get_bsrn(start, end, station, username, password,
              logical_records=('0100',), local_path=None):
     """
     Retrieve ground measured irradiance data from the BSRN FTP server.
@@ -73,12 +73,12 @@ def get_bsrn(station, start, end, username, password,
 
     Parameters
     ----------
-    station: str
-        3-letter BSRN station abbreviation
     start: datetime-like
         First day of the requested period
     end: datetime-like
         Last day of the requested period
+    station: str
+        3-letter BSRN station abbreviation
     username: str
         username for accessing the BSRN FTP server
     password: str
@@ -116,7 +116,7 @@ def get_bsrn(station, start, end, username, password,
     as described in the BSRN's Data Release Guidelines [3]_.
 
     Currently only parsing of logical records 0100, 0300 and 0500 is supported.
-    Note not all stations provide LR 0300 and 0500. However, LR 0100 is
+    Note not all stations measure LR0300 and LR0500. However, LR0100 is
     mandatory as it contains the basic irradiance and auxillary measurements.
     See [4]_ for a description of the different logical records. Future updates
     may include parsing of additional data and metadata.
@@ -156,7 +156,7 @@ def get_bsrn(station, start, end, username, password,
     # Generate list files to download based on start/end (SSSMMYY.dat.gz)
     filenames = pd.date_range(
         start, end.replace(day=1) + pd.DateOffset(months=1), freq='1M')\
-        .strftime(f"{station}%m%y.dat.gz")
+        .strftime(f"{station}%m%y.dat.gz").tolist()
 
     # Create FTP connection
     with ftplib.FTP(BSRN_FTP_URL, username, password) as ftp:

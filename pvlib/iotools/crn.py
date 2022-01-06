@@ -60,8 +60,9 @@ def read_crn(filename):
     -----
     CRN files contain 5 minute averages labeled by the interval ending
     time. Here, missing data is flagged as NaN, rather than the lowest
-    possible integer for a field (e.g. -999 or -99). Air temperature in
-    deg C. Wind speed in m/s at a height of 1.5 m above ground level.
+    possible integer for a field (e.g. -999 or -99). Air temperature is
+    in deg C and wind speed is in m/s at a height of 1.5 m above ground
+    level.
 
     Variables corresponding to standard pvlib variables are renamed,
     e.g. `SOLAR_RADIATION` becomes `ghi`. See the
@@ -103,11 +104,6 @@ def read_crn(filename):
     dtindex = pd.to_datetime(dts['UTC_DATE'] + dts['UTC_TIME'].str.zfill(4),
                              format='%Y%m%d%H%M', utc=True)
     data = data.set_index(dtindex)
-    try:
-        # to_datetime(utc=True) does not work in older versions of pandas
-        data = data.tz_localize('UTC')
-    except TypeError:
-        pass
 
     # Now we can set nans. This could be done a per column basis to be
     # safer, since in principle a real -99 value could occur in a -9999

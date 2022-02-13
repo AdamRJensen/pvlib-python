@@ -1,0 +1,73 @@
+#MESOR V1.1 11.2007
+#type sequenceOfRadiationValue
+#unitName W/m^2
+#valueType Irradiance
+#IPR.providerName Baseline Surface Radiation Network (BSRN)
+#IPR.providerURL http://bsrn.ethz.ch
+#IPR.timeSeriesTitle Cabauw
+#IPR.copyrightText BSRN
+#location.latitude 51.58000
+#location.longitude 4.56000
+#location.height 0
+#location.summarizationType 1h
+#spectral.begin 300
+#spectral.end 3000
+#spectral.unit nm
+#timezone UTC
+#comment converted from original by read_bsrn.pl
+#comment converted at Mon, 29 Oct 2007 09:45:07 +0000
+#comment by choyer at wisent.tt.st.dlr.de
+#comment instrument 0 manufacturer KIPP
+#comment instrument 0 model
+#comment instrument 0 comment XXX 
+#comment instrument 0 calibrated at Delft
+#comment instrument 0 calib remark 1 Calibration units 10E-6 V/W/m^2
+#comment instrument 0 calib remark 2 XXX
+#comment instrument 1 manufacturer KIPP
+#comment instrument 1 model
+#comment instrument 1 comment XXX
+#comment instrument 1 calibrated at Delft
+#comment instrument 1 calib remark 1 Calibration units 10E-6 V/W/m^2
+#comment instrument 1 calib remark 2 XXX
+#comment instrument 2 manufacturer KIPP
+#comment instrument 2 model
+#comment instrument 2 comment XXX
+#comment instrument 2 calibrated at Delft
+#comment instrument 2 calib remark 1 Calibration units 10E-6 V/W/m^2
+#comment instrument 2 calib remark 2 XXX
+#comment instrument 3 manufacturer KIPP
+#comment instrument 3 model
+#comment instrument 3 comment XXX
+#comment instrument 3 calibrated at Delft
+#comment instrument 3 calib remark 1 Calibration units 10E-6 V/W/m^2
+#comment instrument 3 calib remark 2 XXX
+#channel date "date" YYYY-MM-DD
+#channel time "time" HH:MM
+#channel GHI "global" "W/m2"
+#channel DNI "direct" "W/m2"
+#channel DHI "diffuse" "W/m2"
+#channel NoMV "number of minute values used for averaging" " "
+#begindata
+2005-02-01 01:00 -999.9 -999.9 -999.9 0
+2005-02-01 02:00 -999.9 -999.9 -999.9 0
+2005-02-01 03:00 -999.9 -999.9 -999.9 34
+2005-02-01 04:00 -999.9 -999.9 -999.9 14
+2005-02-01 05:00 -999.9 -999.9 -999.9 12
+2005-02-01 06:00 0.0 0.0 0.0 64
+2005-02-01 07:00 0.0 0.0 0.0 120
+2005-02-01 08:00 8.5 0.0 8.2 120
+2005-02-01 09:00 37.9 2.2 35.2 120
+2005-02-01 10:00 98.3 5.2 92.8 120
+2005-02-01 11:00 125.3 11.2 113.5 120
+2005-02-01 12:00 157.6 20.1 138.2 120
+2005-02-01 13:00 242.8 74.3 167.7 120
+2005-02-01 14:00 128.2 6.5 122.2 120
+2005-02-01 15:00 101.2 18.6 81.8 120
+2005-02-01 16:00 32.3 2.7 29.3 120
+2005-02-01 17:00 4.7 0.0 4.4 114
+2005-02-01 18:00 0.0 0.0 0.0 78
+2005-02-01 19:00 -999.9 -999.9 -999.9 22
+2005-02-01 20:00 -999.9 -999.9 -999.9 10
+2005-02-01 21:00 -999.9 -999.9 -999.9 38
+2005-02-01 22:00 0.0 0.0 0.0 84
+2005-02-01 23:0

@@ -3,6 +3,8 @@ Radiation Monitoring Laboratory (SRML) data.
 """
 import numpy as np
 import pandas as pd
+import requests
+import warnings
 
 
 # VARIABLE_MAP is a dictionary mapping SRML data element numbers to their
@@ -23,6 +25,7 @@ VARIABLE_MAP = {
     '937': 'temp_cell',
 }
 
+SRML_URL = "http://solardat.uoregon.edu/download/Archive/"
 
 def read_srml(filename):
     """
@@ -213,6 +216,72 @@ def read_srml_month_from_solardat(station, year, month, filetype='PO'):
         filetype=filetype,
         year=year % 100,
         month=month)
-    url = "http://solardat.uoregon.edu/download/Archive/"
-    data = read_srml(url + file_name)
+    data = read_srml(SRML_URL + file_name)
     return data
+
+
+def get_srml(station, start, end, filetype='PO', local_path=None):
+    """Retrieve SRML data from solardat and read it into a Dataframe.
+    
+    The SRML is described in [1]_. A lit of stations can be found in [2]_.
+
+    Parameters
+    ----------
+    station: str
+        Two letter station abbreviation
+    start: datetime-like
+        First day of the requested period
+    end: datetime-like
+        Last day of the requested period
+    filetype: string
+        SRML file type to gather. See notes for explanation.
+    local_path: str or path-like, optional
+        If specified, path (abs. or relative) of where to save files
+
+    Returns
+    -------
+    data: pd.DataFrame
+        One month of data from SRML.
+
+    Notes
+    -----
+    File types designate the time interval of a file and if it contains
+    raw or processed data. For instance, `RO` designates raw, one minute
+    data and `PO` designates processed one minute data. The availability
+    of file types varies between sites. Below is a table of file types
+    and their time intervals. See [1] for site information.
+
+    ============= ============ ==================
+    time interval raw filetype processed filetype
+    ============= ============ ==================
+    1 minute      RO           PO
+    5 minute      RF           PF
+    15 minute     RQ           PQ
+    hourly        RH           PH
+    ============= ============ ==================
+
+    References
+    ----------
+    .. [1] University of Oregon Solar Radiation Measurement Laboratory
+       `http://solardat.uoregon.edu/ <http://solardat.uoregon.edu/>`_
+    .. [2] Station ID codes - Solar Radiation Measurement Laboratory
+       `http://solardat.uoregon.edu/StationIDCodes.html>`_       
+    """
+    # Two-letter station abbreviation should be uppercase
+    station = station.upper()
+
+    # Generate list files to download based on start/end (SSSMMYY.dat.gz)
+    filenames = pd.date_range(
+        start, end.replace(day=1)+pd.DateOffset(months=1), freq='1M')\
+        .strftime(f"{station}{filetype}%y%m.txt")
+
+    dfs = []  # Initialize list of monthly dataframes
+    for f in filenames:
+        try:
+            dfi = read_srml(SRML_URL + f)
+            dfs.append(dfi)
+        except requests.HTTPError:
+            warnings.warn(f"The following file was not found: {f}")
+    data = pd.concat(dfs, axis='rows')
+    return data
+

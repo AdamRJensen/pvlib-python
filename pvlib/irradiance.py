@@ -30,6 +30,7 @@ SURFACE_ALBEDOS = {'urban': 0.18,
                    'dirty steel': 0.08,
                    'sea': 0.06
 }
+# Test
 
 
 def get_extra_radiation(datetime_or_doy, solar_constant=1366.1,

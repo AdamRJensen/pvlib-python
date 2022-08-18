@@ -28,7 +28,8 @@ SURFACE_ALBEDOS = {'urban': 0.18,
                    'copper': 0.74,
                    'fresh steel': 0.35,
                    'dirty steel': 0.08,
-                   'sea': 0.06}
+                   'sea': 0.06
+}
 
 
 def get_extra_radiation(datetime_or_doy, solar_constant=1366.1,

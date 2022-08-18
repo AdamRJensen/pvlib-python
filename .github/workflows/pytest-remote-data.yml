@@ -45,7 +45,6 @@ name: pytest-remote-data
 
 on:
   pull_request_target:
-    types: [labeled]
   push:
     branches:
     - master

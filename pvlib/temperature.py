@@ -6,6 +6,11 @@ PV modules and cells.
 import numpy as np
 import pandas as pd
 from pvlib.tools import sind
+from pvlib._deprecation import warn_deprecated
+from pvlib.tools import _get_sample_intervals
+import scipy
+import warnings
+
 
 TEMPERATURE_MODEL_PARAMETERS = {
     'sapm': {
@@ -285,7 +290,7 @@ def sapm_cell_from_module(module_temperature, poa_global, deltaT,
 
 
 def pvsyst_cell(poa_global, temp_air, wind_speed=1.0, u_c=29.0, u_v=0.0,
-                eta_m=0.1, alpha_absorption=0.9):
+                eta_m=None, module_efficiency=0.1, alpha_absorption=0.9):
     r"""
     Calculate cell temperature using an empirical heat loss factor model
     as implemented in PVsyst.
@@ -300,7 +305,7 @@ def pvsyst_cell(poa_global, temp_air, wind_speed=1.0, u_c=29.0, u_v=0.0,
 
     wind_speed : numeric, default 1.0
         Wind speed in m/s measured at the same height for which the wind loss
-        factor was determined.  The default value 1.0 m/2 is the wind
+        factor was determined.  The default value 1.0 m/s is the wind
         speed at module height used to determine NOCT. [m/s]
 
     u_c : float, default 29.0
@@ -313,11 +318,14 @@ def pvsyst_cell(poa_global, temp_air, wind_speed=1.0, u_c=29.0, u_v=0.0,
     u_v : float, default 0.0
         Combined heat loss factor influenced by wind. Parameter :math:`U_{v}`
         in :eq:`pvsyst`.
-        :math:`\left[ \frac{\text{W}/\text{m}^2}{\text{C}\ \left( \text{m/s} \right)} \right]`
+        :math:`\left[ \frac{\text{W}/\text{m}^2}{\text{C}\ \left( \text{m/s} \right)} \right]`  # noQA: E501
 
-    eta_m : numeric, default 0.1
-        Module external efficiency as a fraction, i.e., DC power / poa_global.
-        Parameter :math:`\eta_{m}` in :eq:`pvsyst`.
+    eta_m : numeric, default None (deprecated, use module_efficiency instead)
+
+    module_efficiency : numeric, default 0.1
+        Module external efficiency as a fraction. Parameter :math:`\eta_{m}`
+        in :eq:`pvsyst`. Calculate as
+        :math:`\eta_{m} = DC\ power / (POA\ irradiance \times module\ area)`.
 
     alpha_absorption : numeric, default 0.9
         Absorption coefficient. Parameter :math:`\alpha` in :eq:`pvsyst`.
@@ -369,8 +377,13 @@ def pvsyst_cell(poa_global, temp_air, wind_speed=1.0, u_c=29.0, u_v=0.0,
     37.93103448275862
     """
 
+    if eta_m:
+        warn_deprecated(
+            since='v0.9', message='eta_m overwriting module_efficiency',
+            name='eta_m', alternative='module_efficiency', removal='v0.10')
+        module_efficiency = eta_m
     total_loss_factor = u_c + u_v * wind_speed
-    heat_input = poa_global * alpha_absorption * (1 - eta_m)
+    heat_input = poa_global * alpha_absorption * (1 - module_efficiency)
     temp_difference = heat_input / total_loss_factor
     return temp_air + temp_difference
 
@@ -706,3 +719,262 @@ def fuentes(poa_global, temp_air, wind_speed, noct_installed, module_height=5,
         sun0 = sun
 
     return pd.Series(tmod_array - 273.15, index=poa_global.index, name='tmod')
+
+
+def _adj_for_mounting_standoff(x):
+    # supports noct cell temperature function. Except for x > 3.5, the SAM code
+    # and documentation aren't clear on the precise intervals. The choice of
+    # < or <= here is pvlib's.
+    return np.piecewise(x, [x <= 0, (x > 0) & (x < 0.5),
+                            (x >= 0.5) & (x < 1.5), (x >= 1.5) & (x < 2.5),
+                            (x >= 2.5) & (x <= 3.5), x > 3.5],
+                        [0., 18., 11., 6., 2., 0.])
+
+
+def noct_sam(poa_global, temp_air, wind_speed, noct, module_efficiency,
+             effective_irradiance=None, transmittance_absorptance=0.9,
+             array_height=1, mount_standoff=4):
+    r'''
+    Cell temperature model from the System Advisor Model (SAM).
+
+    The model is described in [1]_, Section 10.6.
+
+    Parameters
+    ----------
+    poa_global : numeric
+        Total incident irradiance. [W/m^2]
+
+    temp_air : numeric
+        Ambient dry bulb temperature. [C]
+
+    wind_speed : numeric
+        Wind speed in m/s measured at the same height for which the wind loss
+        factor was determined.  The default value 1.0 m/s is the wind
+        speed at module height used to determine NOCT. [m/s]
+
+    noct : float
+        Nominal operating cell temperature [C], determined at conditions of
+        800 W/m^2 irradiance, 20 C ambient air temperature and 1 m/s wind.
+
+    module_efficiency : float
+        Module external efficiency [unitless] at reference conditions of
+        1000 W/m^2 and 20C. Denoted as :math:`eta_{m}` in [1]_. Calculate as
+        :math:`\eta_{m} = \frac{V_{mp} I_{mp}}{A \times 1000 W/m^2}`
+        where A is module area [m^2].
+
+    effective_irradiance : numeric, default None.
+        The irradiance that is converted to photocurrent. If None,
+        assumed equal to poa_global. [W/m^2]
+
+    transmittance_absorptance : numeric, default 0.9
+        Coefficient for combined transmittance and absorptance effects.
+        [unitless]
+
+    array_height : int, default 1
+        Height of array above ground in stories (one story is about 3m). Must
+        be either 1 or 2. For systems elevated less than one story, use 1.
+        If system is elevated more than two stories, use 2.
+
+    mount_standoff : numeric, default 4
+        Distance between array mounting and mounting surface. Use default
+        if system is ground-mounted. [inches]
+
+    Returns
+    -------
+    cell_temperature : numeric
+        Cell temperature. [C]
+
+    Raises
+    ------
+    ValueError
+        If array_height is an invalid value (must be 1 or 2).
+
+    References
+    ----------
+    .. [1] Gilman, P., Dobos, A., DiOrio, N., Freeman, J., Janzou, S.,
+           Ryberg, D., 2018, "SAM Photovoltaic Model Technical Reference
+           Update", National Renewable Energy Laboratory Report
+           NREL/TP-6A20-67399.
+    '''
+    # in [1] the denominator for irr_ratio isn't precisely clear. From
+    # reproducing output of the SAM function noct_celltemp_t, we determined
+    # that:
+    #  - G_total (SAM) is broadband plane-of-array irradiance before
+    #    reflections. Equivalent to pvlib variable poa_global
+    #  - Geff_total (SAM) is POA irradiance after reflections and
+    #    adjustment for spectrum. Equivalent to effective_irradiance
+    if effective_irradiance is None:
+        irr_ratio = 1.
+    else:
+        irr_ratio = effective_irradiance / poa_global
+
+    if array_height == 1:
+        wind_adj = 0.51 * wind_speed
+    elif array_height == 2:
+        wind_adj = 0.61 * wind_speed
+    else:
+        raise ValueError(
+            f'array_height must be 1 or 2, {array_height} was given')
+
+    noct_adj = noct + _adj_for_mounting_standoff(mount_standoff)
+    tau_alpha = transmittance_absorptance * irr_ratio
+
+    # [1] Eq. 10.37 isn't clear on exactly what "G" is. SAM SSC code uses
+    # poa_global where G appears
+    cell_temp_init = poa_global / 800. * (noct_adj - 20.)
+    heat_loss = 1 - module_efficiency / tau_alpha
+    wind_loss = 9.5 / (5.7 + 3.8 * wind_adj)
+    return temp_air + cell_temp_init * heat_loss * wind_loss
+
+
+def prilliman(temp_cell, wind_speed, unit_mass=11.1, coefficients=None):
+    """
+    Smooth short-term cell temperature transients using the Prilliman model.
+
+    The Prilliman et al. model [1]_ applies a weighted moving average to
+    the output of a steady-state cell temperature model to account for
+    a module's thermal inertia by smoothing the cell temperature's
+    response to changing weather conditions.
+
+    .. warning::
+        This implementation requires the time series inputs to be regularly
+        sampled in time with frequency less than 20 minutes.  Data with
+        irregular time steps (including from data gaps, missing leap days,
+        etc) should be resampled prior to using this function.
+
+    Parameters
+    ----------
+    temp_cell : pandas.Series with DatetimeIndex
+        Cell temperature modeled with steady-state assumptions. [C]
+
+    wind_speed : pandas.Series
+        Wind speed, adjusted to correspond to array height [m/s]
+
+    unit_mass : float, default 11.1
+        Total mass of module divided by its one-sided surface area [kg/m^2]
+
+    coefficients : 4-element list-like, optional
+        Values for coefficients a_0 through a_3, see Eq. 9 of [1]_
+
+    Returns
+    -------
+    temp_cell : pandas.Series
+        Smoothed version of the input cell temperature. Input temperature
+        with sampling interval >= 20 minutes is returned unchanged. [C]
+
+    Notes
+    -----
+    This smoothing model was developed and validated using the SAPM
+    cell temperature model for the steady-state input.
+
+    Smoothing is done using the 20 minute window behind each temperature
+    value. At the beginning of the series where a full 20 minute window is not
+    possible, partial windows are used instead.
+
+    Output ``temp_cell[k]`` is NaN when input ``wind_speed[k]`` is NaN, or
+    when no non-NaN data are in the input temperature for the 20 minute window
+    preceding index ``k``.
+
+    References
+    ----------
+    .. [1] M. Prilliman, J. S. Stein, D. Riley and G. Tamizhmani,
+       "Transient Weighted Moving-Average Model of Photovoltaic Module
+       Back-Surface Temperature," IEEE Journal of Photovoltaics, 2020.
+       :doi:`10.1109/JPHOTOV.2020.2992351`
+    """
+
+    # `sample_interval` in minutes:
+    sample_interval, samples_per_window = \
+        _get_sample_intervals(times=temp_cell.index, win_length=20)
+
+    if sample_interval >= 20:
+        warnings.warn("temperature.prilliman only applies smoothing when "
+                      "the sampling interval is shorter than 20 minutes "
+                      f"(input sampling interval: {sample_interval} minutes);"
+                      " returning input temperature series unchanged")
+        # too coarsely sampled for smoothing to be relevant
+        return temp_cell
+
+    # handle cases where the time series is shorter than 20 minutes total
+    samples_per_window = min(samples_per_window, len(temp_cell))
+
+    # prefix with NaNs so that the rolling window is "full",
+    # even for the first actual value:
+    prefix = np.full(samples_per_window, np.nan)
+    temp_cell_prefixed = np.append(prefix, temp_cell.values)
+
+    # generate matrix of integers for creating windows with indexing
+    H = scipy.linalg.hankel(np.arange(samples_per_window),
+                            np.arange(samples_per_window - 1,
+                                      len(temp_cell_prefixed) - 1))
+    # each row of `subsets` is the values in one window
+    subsets = temp_cell_prefixed[H].T
+
+    # `subsets` now looks like this (for 5-minute data, so 4 samples/window)
+    # where "1." is a stand-in for the actual temperature values
+    # [[nan, nan, nan, nan],
+    #  [nan, nan, nan,  1.],
+    #  [nan, nan,  1.,  1.],
+    #  [nan,  1.,  1.,  1.],
+    #  [ 1.,  1.,  1.,  1.],
+    #  [ 1.,  1.,  1.,  1.],
+    #  [ 1.,  1.,  1.,  1.],
+    #  ...
+
+    # calculate weights for the values in each window
+    if coefficients is not None:
+        a = coefficients
+    else:
+        # values from [1], Table II
+        a = [0.0046, 0.00046, -0.00023, -1.6e-5]
+
+    wind_speed = wind_speed.values
+    p = a[0] + a[1]*wind_speed + a[2]*unit_mass + a[3]*wind_speed*unit_mass
+    # calculate the time lag for each sample in the window, paying attention
+    # to units (seconds for `timedeltas`, minutes for `sample_interval`)
+    timedeltas = np.arange(samples_per_window, 0, -1) * sample_interval * 60
+    weights = np.exp(-p[:, np.newaxis] * timedeltas)
+
+    # Set weights corresponding to the prefix values to zero; otherwise the
+    # denominator of the weighted average below would be wrong.
+    # Weights corresponding to (non-prefix) NaN values must be zero too
+    # for the same reason.
+
+    # Right now `weights` is something like this
+    # (using 5-minute inputs, so 4 samples per window -> 4 values per row):
+    # [[0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  ...
+
+    # After the next line, the NaNs in `subsets` will be zeros in `weights`,
+    # like this (with more zeros for any NaNs in the input temperature):
+
+    # [[0.    , 0.    , 0.    , 0.    ],
+    #  [0.    , 0.    , 0.    , 0.4972],
+    #  [0.    , 0.    , 0.2472, 0.4972],
+    #  [0.    , 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  [0.0611, 0.1229, 0.2472, 0.4972],
+    #  ...
+
+    weights[np.isnan(subsets)] = 0
+
+    # change the first row of weights from zero to nan -- this is a
+    # trick to prevent div by zero warning when dividing by summed weights
+    weights[0, :] = np.nan
+
+    # finally, take the weighted average of each window:
+    # use np.nansum for numerator to ignore nans in input temperature, but
+    # np.sum for denominator to propagate nans in input wind speed.
+    numerator = np.nansum(subsets * weights, axis=1)
+    denominator = np.sum(weights, axis=1)
+    smoothed = numerator / denominator
+    smoothed[0] = temp_cell.values[0]
+    smoothed = pd.Series(smoothed, index=temp_cell.index)
+    return smoothed

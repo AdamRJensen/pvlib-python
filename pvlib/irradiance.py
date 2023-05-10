@@ -15,6 +15,9 @@ from pvlib import atmosphere, solarposition, tools
 import pvlib  # used to avoid dni name collision in complete_irradiance
 
 
+def orgill_hollands():
+    return 1
+
 # see References section of get_ground_diffuse function
 SURFACE_ALBEDOS = {'urban': 0.18,
                    'grass': 0.20,

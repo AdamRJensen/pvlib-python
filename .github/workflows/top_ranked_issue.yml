@@ -1,7 +1,8 @@
 name: top_ranked_issues
 
 on:
-  pull_request:  # for testings purposes, should be removed
+  # For testing purposes (can be removed later)
+  pull_request:  
   schedule:
     # Runs every day at 3:00 AM UTC
     - cron: '0 3 * * *'
@@ -10,23 +11,20 @@ jobs:
   run-script:
     runs-on: ubuntu-latest
 
-    # Define GitHub access token
     env:
       GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
     steps:
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install github
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyGithub
 
-    # Run a sample script
-    - name: Run Script
-      run: |
-        python ./scripts/update_top_ranking_issues.py
+      - name: Run Script
+        run: |
+          python ./scripts/update_top_ranking_issues.py

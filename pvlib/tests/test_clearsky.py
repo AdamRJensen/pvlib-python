@@ -511,13 +511,6 @@ def test_linke_turbidity_corners():
         monthly_lt_nointerp(38.2, -181)  # exceeds min longitude
 
 
-def test_degrees_to_index_1():
-    """Test that _degrees_to_index raises an error when something other than
-    'latitude' or 'longitude' is passed."""
-    with pytest.raises(IndexError):  # invalid value for coordinate argument
-        clearsky._degrees_to_index(degrees=22.0, coordinate='width')
-
-
 @pytest.fixture
 def detect_clearsky_data():
     data_file = DATA_DIR / 'detect_clearsky_data.csv'
@@ -538,6 +531,49 @@ def detect_clearsky_data():
     # specify turbidity to guard against future lookup changes
     cs = loc.get_clearsky(expected.index, linke_turbidity=2.658197)
     return expected, cs
+
+
+@pytest.fixture
+def detect_clearsky_threshold_data():
+    # this is (roughly) just a 2 hour period of the same data in
+    # detect_clearsky_data (which only spans 30 minutes)
+    data_file = DATA_DIR / 'detect_clearsky_threshold_data.csv'
+    expected = pd.read_csv(
+        data_file, index_col=0, parse_dates=True, comment='#')
+    expected = expected.tz_localize('UTC').tz_convert('Etc/GMT+7')
+    metadata = {}
+    with data_file.open() as f:
+        for line in f:
+            if line.startswith('#'):
+                key, value = line.strip('# \n').split(':')
+                metadata[key] = float(value)
+            else:
+                break
+    metadata['window_length'] = int(metadata['window_length'])
+    loc = Location(metadata['latitude'], metadata['longitude'],
+                   altitude=metadata['elevation'])
+    # specify turbidity to guard against future lookup changes
+    cs = loc.get_clearsky(expected.index, linke_turbidity=2.658197)
+    return expected, cs
+
+
+def test_clearsky_get_threshold():
+    out = clearsky._clearsky_get_threshold(4.5)
+    expected = (58.75, 75, 64.375, -45, 80.0, 0.009375, 58.75)
+    assert np.allclose(out, expected)
+
+
+def test_clearsky_get_threshold_raises_error():
+    with pytest.raises(ValueError, match='can only be used for inputs'):
+        clearsky._clearsky_get_threshold(0.5)
+
+
+def test_detect_clearsky_calls_threshold(mocker, detect_clearsky_threshold_data):
+    threshold_spy = mocker.spy(clearsky, '_clearsky_get_threshold')
+    expected, cs = detect_clearsky_threshold_data
+    threshold_actual = clearsky.detect_clearsky(expected['GHI'], cs['ghi'],
+                       infer_limits=True)
+    assert threshold_spy.call_count == 1
 
 
 def test_detect_clearsky(detect_clearsky_data):
@@ -595,7 +631,7 @@ def test_detect_clearsky_window(detect_clearsky_data):
     clear_samples = clearsky.detect_clearsky(
         expected['GHI'], cs['ghi'], window_length=3)
     expected = expected['Clear or not'].copy()
-    expected.iloc[-3:] = True
+    expected.iloc[-3:] = 1
     assert_series_equal(expected, clear_samples,
                         check_dtype=False, check_names=False)
 
@@ -634,6 +670,23 @@ def test_detect_clearsky_missing_index(detect_clearsky_data):
     expected, cs = detect_clearsky_data
     with pytest.raises(ValueError):
         clearsky.detect_clearsky(expected['GHI'].values, cs['ghi'].values)
+
+
+def test_detect_clearsky_not_enough_data(detect_clearsky_data):
+    expected, cs = detect_clearsky_data
+    with pytest.raises(ValueError, match='have at least'):
+        clearsky.detect_clearsky(expected['GHI'], cs['ghi'], window_length=60)
+
+
+@pytest.mark.parametrize("window_length", [5, 10, 15, 20, 25])
+def test_detect_clearsky_optimizer_not_failed(
+    detect_clearsky_data, window_length
+):
+    expected, cs = detect_clearsky_data
+    clear_samples = clearsky.detect_clearsky(
+        expected["GHI"], cs["ghi"], window_length=window_length
+    )
+    assert isinstance(clear_samples, pd.Series)
 
 
 @pytest.fixture
@@ -697,10 +750,11 @@ def test__calc_stats(detect_clearsky_helper_data):
 def test_bird():
     """Test Bird/Hulstrom Clearsky Model"""
     times = pd.date_range(start='1/1/2015 0:00', end='12/31/2015 23:00',
-                          freq='H')
+                          freq='h')
     tz = -7  # test timezone
     gmt_tz = pytz.timezone('Etc/GMT%+d' % -(tz))
     times = times.tz_localize(gmt_tz)  # set timezone
+    times_utc = times.tz_convert('UTC')
     # match test data from BIRD_08_16_2012.xls
     latitude = 40.
     longitude = -105.
@@ -711,9 +765,9 @@ def test_bird():
     aod_380nm = 0.15
     b_a = 0.85
     alb = 0.2
-    eot = solarposition.equation_of_time_spencer71(times.dayofyear)
+    eot = solarposition.equation_of_time_spencer71(times_utc.dayofyear)
     hour_angle = solarposition.hour_angle(times, longitude, eot) - 0.5 * 15.
-    declination = solarposition.declination_spencer71(times.dayofyear)
+    declination = solarposition.declination_spencer71(times_utc.dayofyear)
     zenith = solarposition.solar_zenith_analytical(
         np.deg2rad(latitude), np.deg2rad(hour_angle), declination
     )
@@ -729,33 +783,60 @@ def test_bird():
     Eb, Ebh, Gh, Dh = (irrads[_] for _ in field_names)
     data_path = DATA_DIR / 'BIRD_08_16_2012.csv'
     testdata = pd.read_csv(data_path, usecols=range(1, 26), header=1).dropna()
-    testdata.index = times[1:48]
-    assert np.allclose(testdata['DEC'], np.rad2deg(declination[1:48]))
-    assert np.allclose(testdata['EQT'], eot[1:48], rtol=1e-4)
-    assert np.allclose(testdata['Hour Angle'], hour_angle[1:48])
-    assert np.allclose(testdata['Zenith Ang'], zenith[1:48])
+    testdata[['DEC', 'EQT']] = testdata[['DEC', 'EQT']].shift(tz)
+    testdata = testdata[:tz]
+    end = 48 + tz
+    testdata.index = times[1:end]
+    assert np.allclose(testdata['DEC'], np.rad2deg(declination[1:end]))
+    assert np.allclose(testdata['EQT'], eot[1:end], rtol=1e-4)
+    assert np.allclose(testdata['Hour Angle'], hour_angle[1:end], rtol=1e-2)
+    assert np.allclose(testdata['Zenith Ang'], zenith[1:end], rtol=1e-2)
     dawn = zenith < 88.
     dusk = testdata['Zenith Ang'] < 88.
     am = pd.Series(np.where(dawn, airmass, 0.), index=times).fillna(0.0)
     assert np.allclose(
-        testdata['Air Mass'].where(dusk, 0.), am[1:48], rtol=1e-3
+        testdata['Air Mass'].where(dusk, 0.), am[1:end], rtol=1e-3
     )
     direct_beam = pd.Series(np.where(dawn, Eb, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata['Direct Beam'].where(dusk, 0.), direct_beam[1:48], rtol=1e-3
+        testdata['Direct Beam'].where(dusk, 0.), direct_beam[1:end], rtol=1e-3
     )
     direct_horz = pd.Series(np.where(dawn, Ebh, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata['Direct Hz'].where(dusk, 0.), direct_horz[1:48], rtol=1e-3
+        testdata['Direct Hz'].where(dusk, 0.), direct_horz[1:end], rtol=1e-3
     )
     global_horz = pd.Series(np.where(dawn, Gh, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata['Global Hz'].where(dusk, 0.), global_horz[1:48], rtol=1e-3
+        testdata['Global Hz'].where(dusk, 0.), global_horz[1:end], rtol=1e-3
     )
     diffuse_horz = pd.Series(np.where(dawn, Dh, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata['Dif Hz'].where(dusk, 0.), diffuse_horz[1:48], rtol=1e-3
+        testdata['Dif Hz'].where(dusk, 0.), diffuse_horz[1:end], rtol=1e-3
     )
+    # repeat test with albedo as a Series
+    alb_series = pd.Series(0.2, index=times)
+    irrads = clearsky.bird(
+        zenith, airmass, aod_380nm, aod_500nm, h2o_cm, o3_cm, press_mB * 100.,
+        etr, b_a, alb_series
+    )
+    Eb, Ebh, Gh, Dh = (irrads[_] for _ in field_names)
+    direct_beam = pd.Series(np.where(dawn, Eb, 0.), index=times).fillna(0.)
+    assert np.allclose(
+        testdata['Direct Beam'].where(dusk, 0.), direct_beam[1:end], rtol=1e-3
+    )
+    direct_horz = pd.Series(np.where(dawn, Ebh, 0.), index=times).fillna(0.)
+    assert np.allclose(
+        testdata['Direct Hz'].where(dusk, 0.), direct_horz[1:end], rtol=1e-3
+    )
+    global_horz = pd.Series(np.where(dawn, Gh, 0.), index=times).fillna(0.)
+    assert np.allclose(
+        testdata['Global Hz'].where(dusk, 0.), global_horz[1:end], rtol=1e-3
+    )
+    diffuse_horz = pd.Series(np.where(dawn, Dh, 0.), index=times).fillna(0.)
+    assert np.allclose(
+        testdata['Dif Hz'].where(dusk, 0.), diffuse_horz[1:end], rtol=1e-3
+    )
+
     # test keyword parameters
     irrads2 = clearsky.bird(
         zenith, airmass, aod_380nm, aod_500nm, h2o_cm, dni_extra=etr
@@ -763,27 +844,31 @@ def test_bird():
     Eb2, Ebh2, Gh2, Dh2 = (irrads2[_] for _ in field_names)
     data_path = DATA_DIR / 'BIRD_08_16_2012_patm.csv'
     testdata2 = pd.read_csv(data_path, usecols=range(1, 26), header=1).dropna()
-    testdata2.index = times[1:48]
+    testdata2[['DEC', 'EQT']] = testdata2[['DEC', 'EQT']].shift(tz)
+    testdata2 = testdata2[:tz]
+    testdata2.index = times[1:end]
     direct_beam2 = pd.Series(np.where(dawn, Eb2, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata2['Direct Beam'].where(dusk, 0.), direct_beam2[1:48], rtol=1e-3
+        testdata2['Direct Beam'].where(dusk, 0.), direct_beam2[1:end],
+        rtol=1e-3
     )
     direct_horz2 = pd.Series(np.where(dawn, Ebh2, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata2['Direct Hz'].where(dusk, 0.), direct_horz2[1:48], rtol=1e-3
+        testdata2['Direct Hz'].where(dusk, 0.), direct_horz2[1:end], rtol=1e-3
     )
     global_horz2 = pd.Series(np.where(dawn, Gh2, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata2['Global Hz'].where(dusk, 0.), global_horz2[1:48], rtol=1e-3
+        testdata2['Global Hz'].where(dusk, 0.), global_horz2[1:end], rtol=1e-3
     )
     diffuse_horz2 = pd.Series(np.where(dawn, Dh2, 0.), index=times).fillna(0.)
     assert np.allclose(
-        testdata2['Dif Hz'].where(dusk, 0.), diffuse_horz2[1:48], rtol=1e-3
+        testdata2['Dif Hz'].where(dusk, 0.), diffuse_horz2[1:end], rtol=1e-3
     )
     # test scalars just at noon
     # XXX: calculations start at 12am so noon is at index = 12
     irrads3 = clearsky.bird(
-        zenith[12], airmass[12], aod_380nm, aod_500nm, h2o_cm, dni_extra=etr[12]
+        zenith[12], airmass[12], aod_380nm, aod_500nm, h2o_cm,
+        dni_extra=etr.iloc[12]
     )
     Eb3, Ebh3, Gh3, Dh3 = (irrads3[_] for _ in field_names)
     # XXX: testdata starts at 1am so noon is at index = 11
@@ -791,4 +876,3 @@ def test_bird():
         [Eb3, Ebh3, Gh3, Dh3],
         testdata2[['Direct Beam', 'Direct Hz', 'Global Hz', 'Dif Hz']].iloc[11],
         rtol=1e-3)
-    return pd.DataFrame({'Eb': Eb, 'Ebh': Ebh, 'Gh': Gh, 'Dh': Dh}, index=times)

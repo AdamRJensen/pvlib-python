@@ -13,15 +13,10 @@ import pandas as pd
 from dataclasses import dataclass, field
 from typing import Union, Tuple, Optional, TypeVar
 
-from pvlib import (atmosphere, clearsky, inverter, pvsystem, solarposition,
-                   temperature, tools)
-from pvlib.tracking import SingleAxisTracker
+from pvlib import pvsystem, iam
 import pvlib.irradiance  # avoid name conflict with full import
 from pvlib.pvsystem import _DC_MODEL_PARAMS
-from pvlib._deprecation import pvlibDeprecationWarning
 from pvlib.tools import _build_kwargs
-
-from pvlib._deprecation import deprecated
 
 # keys that are used to detect input data and assign data to appropriate
 # ModelChain attribute
@@ -43,7 +38,7 @@ DATA_KEYS = WEATHER_KEYS + POA_KEYS + TEMPERATURE_KEYS
 
 # these dictionaries contain the default configuration for following
 # established modeling sequences. They can be used in combination with
-# basic_chain and ModelChain. They are used by the ModelChain methods
+# ModelChain, particularly they are used by the methods
 # ModelChain.with_pvwatts, ModelChain.with_sapm, etc.
 
 # pvwatts documentation states that it uses the following reference for
@@ -64,165 +59,6 @@ SAPM_CONFIG = dict(
 )
 
 
-@deprecated(
-    since='0.9.1',
-    name='pvlib.modelchain.basic_chain',
-    alternative=('pvlib.modelchain.ModelChain.with_pvwatts'
-                 ' or pvlib.modelchain.ModelChain.with_sapm'),
-    addendum='Note that the with_xyz methods take different model parameters.'
-)
-def basic_chain(times, latitude, longitude,
-                surface_tilt, surface_azimuth,
-                module_parameters, temperature_model_parameters,
-                inverter_parameters,
-                irradiance=None, weather=None,
-                transposition_model='haydavies',
-                solar_position_method='nrel_numpy',
-                airmass_model='kastenyoung1989',
-                altitude=None, pressure=None,
-                **kwargs):
-    """
-    An experimental function that computes all of the modeling steps
-    necessary for calculating power or energy for a PV system at a given
-    location.
-
-    Parameters
-    ----------
-    times : DatetimeIndex
-        Times at which to evaluate the model.
-
-    latitude : float.
-        Positive is north of the equator.
-        Use decimal degrees notation.
-
-    longitude : float.
-        Positive is east of the prime meridian.
-        Use decimal degrees notation.
-
-    surface_tilt : numeric
-        Surface tilt angles in decimal degrees.
-        The tilt angle is defined as degrees from horizontal
-        (e.g. surface facing up = 0, surface facing horizon = 90)
-
-    surface_azimuth : numeric
-        Surface azimuth angles in decimal degrees.
-        The azimuth convention is defined
-        as degrees east of north
-        (North=0, South=180, East=90, West=270).
-
-    module_parameters : None, dict or Series
-        Module parameters as defined by the SAPM. See pvsystem.sapm for
-        details.
-
-    temperature_model_parameters : None, dict or Series.
-        Temperature model parameters as defined by the SAPM.
-        See temperature.sapm_cell for details.
-
-    inverter_parameters : None, dict or Series
-        Inverter parameters as defined by the CEC. See
-        :py:func:`inverter.sandia` for details.
-
-    irradiance : None or DataFrame, default None
-        If None, calculates clear sky data.
-        Columns must be 'dni', 'ghi', 'dhi'.
-
-    weather : None or DataFrame, default None
-        If None, assumes air temperature is 20 C and
-        wind speed is 0 m/s.
-        Columns must be 'wind_speed', 'temp_air'.
-
-    transposition_model : str, default 'haydavies'
-        Passed to system.get_irradiance.
-
-    solar_position_method : str, default 'nrel_numpy'
-        Passed to solarposition.get_solarposition.
-
-    airmass_model : str, default 'kastenyoung1989'
-        Passed to atmosphere.relativeairmass.
-
-    altitude : None or float, default None
-        If None, computed from pressure. Assumed to be 0 m
-        if pressure is also None.
-
-    pressure : None or float, default None
-        If None, computed from altitude. Assumed to be 101325 Pa
-        if altitude is also None.
-
-    **kwargs
-        Arbitrary keyword arguments.
-        See code for details.
-
-    Returns
-    -------
-    output : (dc, ac)
-        Tuple of DC power (with SAPM parameters) (DataFrame) and AC
-        power (Series).
-    """
-
-    if altitude is None and pressure is None:
-        altitude = 0.
-        pressure = 101325.
-    elif altitude is None:
-        altitude = atmosphere.pres2alt(pressure)
-    elif pressure is None:
-        pressure = atmosphere.alt2pres(altitude)
-
-    solar_position = solarposition.get_solarposition(
-        times, latitude, longitude, altitude=altitude, pressure=pressure,
-        method=solar_position_method, **kwargs)
-
-    # possible error with using apparent zenith with some models
-    airmass = atmosphere.get_relative_airmass(
-        solar_position['apparent_zenith'], model=airmass_model)
-    airmass = atmosphere.get_absolute_airmass(airmass, pressure)
-    dni_extra = pvlib.irradiance.get_extra_radiation(solar_position.index)
-
-    aoi = pvlib.irradiance.aoi(surface_tilt, surface_azimuth,
-                               solar_position['apparent_zenith'],
-                               solar_position['azimuth'])
-
-    if irradiance is None:
-        linke_turbidity = clearsky.lookup_linke_turbidity(
-            solar_position.index, latitude, longitude)
-        irradiance = clearsky.ineichen(
-            solar_position['apparent_zenith'],
-            airmass,
-            linke_turbidity,
-            altitude=altitude,
-            dni_extra=dni_extra
-        )
-
-    total_irrad = pvlib.irradiance.get_total_irradiance(
-        surface_tilt,
-        surface_azimuth,
-        solar_position['apparent_zenith'],
-        solar_position['azimuth'],
-        irradiance['dni'],
-        irradiance['ghi'],
-        irradiance['dhi'],
-        model=transposition_model,
-        dni_extra=dni_extra)
-
-    if weather is None:
-        weather = {'wind_speed': 0, 'temp_air': 20}
-
-    cell_temperature = temperature.sapm_cell(
-        total_irrad['poa_global'], weather['temp_air'], weather['wind_speed'],
-        temperature_model_parameters['a'], temperature_model_parameters['b'],
-        temperature_model_parameters['deltaT'])
-
-    effective_irradiance = pvsystem.sapm_effective_irradiance(
-        total_irrad['poa_direct'], total_irrad['poa_diffuse'], airmass, aoi,
-        module_parameters)
-
-    dc = pvsystem.sapm(effective_irradiance, cell_temperature,
-                       module_parameters)
-
-    ac = inverter.sandia(dc['v_mp'], dc['p_mp'], inverter_parameters)
-
-    return dc, ac
-
-
 def get_orientation(strategy, **kwargs):
     """
     Determine a PV system's surface tilt and surface azimuth
@@ -240,7 +76,6 @@ def get_orientation(strategy, **kwargs):
     -------
     surface_tilt, surface_azimuth
     """
-
     if strategy == 'south_at_latitude_tilt':
         surface_azimuth = 180
         surface_tilt = kwargs['latitude']
@@ -252,6 +87,33 @@ def get_orientation(strategy, **kwargs):
                          'be one of south_at_latitude, flat,')
 
     return surface_tilt, surface_azimuth
+
+
+def _getmcattr(self, attr):
+    """
+    Helper for __repr__ methods, needed to avoid recursion in property
+    lookups
+    """
+    out = getattr(self, attr)
+    try:
+        out = out.__name__
+    except AttributeError:
+        pass
+    return out
+
+
+def _mcr_repr(obj):
+    '''
+    Helper for ModelChainResult.__repr__
+    '''
+    if isinstance(obj, tuple):
+        return "Tuple (" + ", ".join([_mcr_repr(o) for o in obj]) + ")"
+    if isinstance(obj, pd.DataFrame):
+        return "DataFrame ({} rows x {} columns)".format(*obj.shape)
+    if isinstance(obj, pd.Series):
+        return "Series (length {})".format(len(obj))
+    # scalar, None, other?
+    return repr(obj)
 
 
 # Type for fields that vary between arrays
@@ -268,7 +130,7 @@ class ModelChainResult:
     _per_array_fields = {'total_irrad', 'aoi', 'aoi_modifier',
                          'spectral_modifier', 'cell_temperature',
                          'effective_irradiance', 'dc', 'diode_params',
-                         'dc_ohmic_losses', 'weather'}
+                         'dc_ohmic_losses', 'weather', 'albedo'}
 
     # system-level information
     solar_position: Optional[pd.DataFrame] = field(default=None)
@@ -366,6 +228,10 @@ class ModelChainResult:
     """DatetimeIndex containing a copy of the index of the input weather data.
     """
 
+    albedo: Optional[PerArray[pd.Series]] = None
+    """Series (or tuple of Series, one for each array) containing albedo.
+    """
+
     def _result_type(self, value):
         """Coerce `value` to the correct type according to
         ``self._singleton_tuples``."""
@@ -380,6 +246,33 @@ class ModelChainResult:
         if key in ModelChainResult._per_array_fields:
             value = self._result_type(value)
         super().__setattr__(key, value)
+
+    def __repr__(self):
+        mc_attrs = dir(self)
+
+        def _head(obj):
+            try:
+                return obj[:3]
+            except:
+                return obj
+
+        if type(self.dc) is tuple:
+            num_arrays = len(self.dc)
+        else:
+            num_arrays = 1
+
+        desc1 = ('=== ModelChainResult === \n')
+        desc2 = (f'Number of Arrays: {num_arrays} \n')
+        attr = 'times'
+        desc3 = ('times (first 3)\n' +
+                 f'{_head(_getmcattr(self, attr))}' +
+                 '\n')
+        lines = []
+        for attr in mc_attrs:
+            if not (attr.startswith('_') or attr=='times'):
+                lines.append(f' {attr}: ' + _mcr_repr(getattr(self, attr)))
+        desc4 = '\n'.join(lines)
+        return (desc1 + desc2 + desc3 + desc4)
 
 
 class ModelChain:
@@ -404,7 +297,8 @@ class ModelChain:
         the physical location at which to evaluate the model.
 
     clearsky_model : str, default 'ineichen'
-        Passed to location.get_clearsky.
+        Passed to location.get_clearsky. Only used when DNI is not found in
+        the weather inputs.
 
     transposition_model : str, default 'haydavies'
         Passed to system.get_irradiance.
@@ -415,35 +309,35 @@ class ModelChain:
     airmass_model : str, default 'kastenyoung1989'
         Passed to location.get_airmass.
 
-    dc_model: None, str, or function, default None
-        If None, the model will be inferred from the parameters that
+    dc_model : str, or function, optional
+        If not specified, the model will be inferred from the parameters that
         are common to all of system.arrays[i].module_parameters.
         Valid strings are 'sapm', 'desoto', 'cec', 'pvsyst', 'pvwatts'.
         The ModelChain instance will be passed as the first argument
         to a user-defined function.
 
-    ac_model: None, str, or function, default None
-        If None, the model will be inferred from the parameters that
+    ac_model : str, or function, optional
+        If not specified, the model will be inferred from the parameters that
         are common to all of system.inverter_parameters.
         Valid strings are 'sandia', 'adr', 'pvwatts'. The
         ModelChain instance will be passed as the first argument to a
         user-defined function.
 
-    aoi_model: None, str, or function, default None
-        If None, the model will be inferred from the parameters that
+    aoi_model : str, or function, optional
+        If not specified, the model will be inferred from the parameters that
         are common to all of system.arrays[i].module_parameters.
         Valid strings are 'physical', 'ashrae', 'sapm', 'martin_ruiz',
-        'no_loss'. The ModelChain instance will be passed as the
+        'interp' and 'no_loss'. The ModelChain instance will be passed as the
         first argument to a user-defined function.
 
-    spectral_model: None, str, or function, default None
-        If None, the model will be inferred from the parameters that
+    spectral_model : str, or function, optional
+        If not specified, the model will be inferred from the parameters that
         are common to all of system.arrays[i].module_parameters.
         Valid strings are 'sapm', 'first_solar', 'no_loss'.
         The ModelChain instance will be passed as the first argument to
         a user-defined function.
 
-    temperature_model: None, str or function, default None
+    temperature_model : str or function, optional
         Valid strings are: 'sapm', 'pvsyst', 'faiman', 'fuentes', 'noct_sam'.
         The ModelChain instance will be passed as the first argument to a
         user-defined function.
@@ -457,16 +351,9 @@ class ModelChain:
         Valid strings are 'pvwatts', 'no_loss'. The ModelChain instance
         will be passed as the first argument to a user-defined function.
 
-    name: None or str, default None
+    name : str, optional
         Name of ModelChain instance.
     """
-
-    # list of deprecated attributes
-    _deprecated_attrs = ['solar_position', 'airmass', 'total_irrad',
-                         'aoi', 'aoi_modifier', 'spectral_modifier',
-                         'cell_temperature', 'effective_irradiance',
-                         'dc', 'ac', 'diode_params', 'tracking',
-                         'weather', 'times', 'losses']
 
     def __init__(self, system, location,
                  clearsky_model='ineichen',
@@ -499,26 +386,6 @@ class ModelChain:
 
         self.results = ModelChainResult()
 
-    def __getattr__(self, key):
-        if key in ModelChain._deprecated_attrs:
-            msg = f'ModelChain.{key} is deprecated and will' \
-                  f' be removed in v0.10. Use' \
-                  f' ModelChain.results.{key} instead'
-            warnings.warn(msg, pvlibDeprecationWarning)
-            return getattr(self.results, key)
-        # __getattr__ is only called if __getattribute__ fails.
-        # In that case we should check if key is a deprecated attribute,
-        # and fail with an AttributeError if it is not.
-        raise AttributeError
-
-    def __setattr__(self, key, value):
-        if key in ModelChain._deprecated_attrs:
-            msg = f'ModelChain.{key} is deprecated from v0.9. Use' \
-                  f' ModelChain.results.{key} instead'
-            warnings.warn(msg, pvlibDeprecationWarning)
-            setattr(self.results, key, value)
-        else:
-            super().__setattr__(key, value)
 
     @classmethod
     def with_pvwatts(cls, system, location,
@@ -545,7 +412,7 @@ class ModelChain:
         airmass_model : str, default 'kastenyoung1989'
             Passed to location.get_airmass.
 
-        name: None or str, default None
+        name : str, optional
             Name of ModelChain instance.
 
         **kwargs
@@ -553,17 +420,39 @@ class ModelChain:
             constructor and take precedence over the default
             configuration.
 
+        Warning
+        -------
+        The PVWatts model defaults to 14 % total system losses. The PVWatts
+        losses are fractions of DC power and can be modified, as shown in the
+        example below.
+
         Examples
         --------
+        >>> from pvlib import temperature, pvsystem, location, modelchain
         >>> module_parameters = dict(gamma_pdc=-0.003, pdc0=4500)
-        >>> inverter_parameters = dict(pac0=4000)
-        >>> tparams = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_glass']
-        >>> system = PVSystem(surface_tilt=30, surface_azimuth=180,
-        ...     module_parameters=module_parameters,
-        ...     inverter_parameters=inverter_parameters,
-        ...     temperature_model_parameters=tparams)
-        >>> location = Location(32.2, -110.9)
-        >>> ModelChain.with_pvwatts(system, location)
+        >>> inverter_parameters = dict(pdc0=4000)
+        >>> tparams = temperature.TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_glass']
+        >>> system = pvsystem.PVSystem(
+        >>>     surface_tilt=30, surface_azimuth=180,
+        >>>     module_parameters=module_parameters,
+        >>>     inverter_parameters=inverter_parameters,
+        >>>     temperature_model_parameters=tparams)
+        >>> loc = location.Location(32.2, -110.9)
+        >>> modelchain.ModelChain.with_pvwatts(system, loc)
+
+        The following example is a modification of the example above but where
+        custom losses have been specified.
+
+        >>> pvwatts_losses = {'soiling': 2, 'shading': 3, 'snow': 0, 'mismatch': 2,
+        >>>                   'wiring': 2, 'connections': 0.5, 'lid': 1.5,
+        >>>                   'nameplate_rating': 1, 'age': 0, 'availability': 30}
+        >>> system_with_custom_losses = pvsystem.PVSystem(
+        >>>     surface_tilt=30, surface_azimuth=180,
+        >>>     module_parameters=module_parameters,
+        >>>     inverter_parameters=inverter_parameters,
+        >>>     temperature_model_parameters=tparams,
+        >>>     losses_parameters=pvwatts_losses)
+        >>> modelchain.ModelChain.with_pvwatts(system_with_custom_losses, loc)
         ModelChain:
           name: None
           clearsky_model: ineichen
@@ -621,7 +510,7 @@ class ModelChain:
         airmass_model : str, default 'kastenyoung1989'
             Passed to location.get_airmass.
 
-        name: None or str, default None
+        name : str, optional
             Name of ModelChain instance.
 
         **kwargs
@@ -674,18 +563,8 @@ class ModelChain:
             'airmass_model', 'dc_model', 'ac_model', 'aoi_model',
             'spectral_model', 'temperature_model', 'losses_model'
         ]
-
-        def getmcattr(self, attr):
-            """needed to avoid recursion in property lookups"""
-            out = getattr(self, attr)
-            try:
-                out = out.__name__
-            except AttributeError:
-                pass
-            return out
-
         return ('ModelChain: \n  ' + '\n  '.join(
-            f'{attr}: {getmcattr(self, attr)}' for attr in attrs))
+            f'{attr}: {_getmcattr(self, attr)}' for attr in attrs))
 
     @property
     def dc_model(self):
@@ -897,6 +776,8 @@ class ModelChain:
                 self._aoi_model = self.sapm_aoi_loss
             elif model == 'martin_ruiz':
                 self._aoi_model = self.martin_ruiz_aoi_loss
+            elif model == 'interp':
+                self._aoi_model = self.interp_aoi_loss
             elif model == 'no_loss':
                 self._aoi_model = self.no_aoi_loss
             else:
@@ -908,22 +789,24 @@ class ModelChain:
         module_parameters = tuple(
             array.module_parameters for array in self.system.arrays)
         params = _common_keys(module_parameters)
-        if {'K', 'L', 'n'} <= params:
+        if iam._IAM_MODEL_PARAMS['physical'] <= params:
             return self.physical_aoi_loss
-        elif {'B5', 'B4', 'B3', 'B2', 'B1', 'B0'} <= params:
+        elif iam._IAM_MODEL_PARAMS['sapm'] <= params:
             return self.sapm_aoi_loss
-        elif {'b'} <= params:
+        elif iam._IAM_MODEL_PARAMS['ashrae'] <= params:
             return self.ashrae_aoi_loss
-        elif {'a_r'} <= params:
+        elif iam._IAM_MODEL_PARAMS['martin_ruiz'] <= params:
             return self.martin_ruiz_aoi_loss
+        elif iam._IAM_MODEL_PARAMS['interp'] <= params:
+            return self.interp_aoi_loss
         else:
             raise ValueError('could not infer AOI model from '
                              'system.arrays[i].module_parameters. Check that '
                              'the module_parameters for all Arrays in '
-                             'system.arrays contain parameters for '
-                             'the physical, aoi, ashrae or martin_ruiz model; '
-                             'explicitly set the model with the aoi_model '
-                             'kwarg; or set aoi_model="no_loss".')
+                             'system.arrays contain parameters for the '
+                             'physical, aoi, ashrae, martin_ruiz or interp '
+                             'model; explicitly set the model with the '
+                             'aoi_model kwarg; or set aoi_model="no_loss".')
 
     def ashrae_aoi_loss(self):
         self.results.aoi_modifier = self.system.get_iam(
@@ -949,6 +832,13 @@ class ModelChain:
     def martin_ruiz_aoi_loss(self):
         self.results.aoi_modifier = self.system.get_iam(
             self.results.aoi, iam_model='martin_ruiz'
+        )
+        return self
+
+    def interp_aoi_loss(self):
+        self.results.aoi_modifier = self.system.get_iam(
+            self.results.aoi,
+            iam_model='interp'
         )
         return self
 
@@ -1064,10 +954,7 @@ class ModelChain:
         temperature_model_parameters = tuple(
             array.temperature_model_parameters for array in self.system.arrays)
         params = _common_keys(temperature_model_parameters)
-        # remove or statement in v0.9
-        if {'a', 'b', 'deltaT'} <= params or (
-                not params and self.system.racking_model is None
-                and self.system.module_type is None):
+        if {'a', 'b', 'deltaT'} <= params:
             return self.sapm_temp
         elif {'u_c', 'u_v'} <= params:
             return self.pvsyst_temp
@@ -1078,11 +965,15 @@ class ModelChain:
         elif {'noct', 'module_efficiency'} <= params:
             return self.noct_sam_temp
         else:
-            raise ValueError(f'could not infer temperature model from '
-                             f'system.temperature_model_parameters. Check '
-                             f'that all Arrays in system.arrays have '
-                             f'parameters for the same temperature model. '
-                             f'Common temperature model parameters: {params}.')
+            raise ValueError('Could not infer temperature model from '
+                             'ModelChain.system.  '
+                             'If Arrays are used to construct the PVSystem, '
+                             'check that all Arrays in '
+                             'ModelChain.system.arrays '
+                             'have parameters for the same temperature model. '
+                             'If Arrays are not used, check that the PVSystem '
+                             'attributes `racking_model` and `module_type` '
+                             'are valid.')
 
     def _set_celltemp(self, model):
         """Set self.results.cell_temperature using the given cell
@@ -1285,13 +1176,13 @@ class ModelChain:
         self._assign_times()
         self.results.solar_position = self.location.get_solarposition(
             self.results.times, method=self.solar_position_method)
-
+        # Calculate the irradiance using the component sum equations,
+        # if needed
         if isinstance(weather, tuple):
             for w in self.results.weather:
                 self._complete_irradiance(w)
         else:
             self._complete_irradiance(self.results.weather)
-
         return self
 
     def _complete_irradiance(self, weather):
@@ -1300,26 +1191,33 @@ class ModelChain:
                    "Results can be too high or negative.\n" +
                    "Help to improve this function on github:\n" +
                    "https://github.com/pvlib/pvlib-python \n")
-
         if {'ghi', 'dhi'} <= icolumns and 'dni' not in icolumns:
             clearsky = self.location.get_clearsky(
-                weather.index, solar_position=self.results.solar_position)
-            weather.loc[:, 'dni'] = pvlib.irradiance.dni(
-                weather.loc[:, 'ghi'], weather.loc[:, 'dhi'],
-                self.results.solar_position.zenith,
-                clearsky_dni=clearsky['dni'],
-                clearsky_tolerance=1.1)
+                weather.index, model=self.clearsky_model,
+                solar_position=self.results.solar_position)
+            complete_irrad_df = pvlib.irradiance.complete_irradiance(
+                solar_zenith=self.results.solar_position.zenith,
+                ghi=weather.ghi,
+                dhi=weather.dhi,
+                dni=None,
+                dni_clear=clearsky.dni)
+            weather.loc[:, 'dni'] = complete_irrad_df.dni
         elif {'dni', 'dhi'} <= icolumns and 'ghi' not in icolumns:
             warnings.warn(wrn_txt, UserWarning)
-            weather.loc[:, 'ghi'] = (
-                weather.dhi + weather.dni *
-                tools.cosd(self.results.solar_position.zenith)
-            )
+            complete_irrad_df = pvlib.irradiance.complete_irradiance(
+                solar_zenith=self.results.solar_position.zenith,
+                ghi=None,
+                dhi=weather.dhi,
+                dni=weather.dni)
+            weather.loc[:, 'ghi'] = complete_irrad_df.ghi
         elif {'dni', 'ghi'} <= icolumns and 'dhi' not in icolumns:
             warnings.warn(wrn_txt, UserWarning)
-            weather.loc[:, 'dhi'] = (
-                weather.ghi - weather.dni *
-                tools.cosd(self.results.solar_position.zenith))
+            complete_irrad_df = pvlib.irradiance.complete_irradiance(
+                solar_zenith=self.results.solar_position.zenith,
+                ghi=weather.ghi,
+                dhi=None,
+                dni=weather.dni)
+            weather.loc[:, 'dhi'] = complete_irrad_df.dhi
 
     def _prep_inputs_solar_pos(self, weather):
         """
@@ -1337,6 +1235,17 @@ class ModelChain:
         self.results.solar_position = self.location.get_solarposition(
             self.results.times, method=self.solar_position_method,
             **kwargs)
+        return self
+
+    def _prep_inputs_albedo(self, weather):
+        """
+        Get albedo from weather
+        """
+        try:
+            self.results.albedo = _tuple_from_dfs(weather, 'albedo')
+        except KeyError:
+            self.results.albedo = tuple([
+                a.albedo for a in self.system.arrays])
         return self
 
     def _prep_inputs_airmass(self):
@@ -1449,7 +1358,7 @@ class ModelChain:
         return self
 
     def _assign_times(self):
-        """Assign self.results.times according the the index of
+        """Assign self.results.times according the index of
         self.results.weather.
 
         If there are multiple DataFrames in self.results.weather then
@@ -1471,11 +1380,17 @@ class ModelChain:
 
         Parameters
         ----------
-        weather : DataFrame, or tuple or list of DataFrame
+        weather : DataFrame, or tuple or list of DataFrames
             Required column names include ``'dni'``, ``'ghi'``, ``'dhi'``.
-            Optional column names are ``'wind_speed'``, ``'temp_air'``; if not
+            Optional column names are ``'wind_speed'``, ``'temp_air'``,
+            ``'albedo'``.
+
+            If optional columns ``'wind_speed'``, ``'temp_air'`` are not
             provided, air temperature of 20 C and wind speed
-            of 0 m/s will be added to the DataFrame.
+            of 0 m/s will be added to the ``weather`` DataFrame.
+
+            If optional column ``'albedo'`` is provided, albedo values in the
+            ModelChain's PVSystem.arrays are ignored.
 
             If `weather` is a tuple or list, it must be of the same length and
             order as the Arrays of the ModelChain's PVSystem.
@@ -1494,7 +1409,7 @@ class ModelChain:
         Notes
         -----
         Assigns attributes to ``results``: ``times``, ``weather``,
-        ``solar_position``, ``airmass``, ``total_irrad``, ``aoi``
+        ``solar_position``, ``airmass``, ``total_irrad``, ``aoi``, ``albedo``.
 
         See also
         --------
@@ -1507,30 +1422,16 @@ class ModelChain:
 
         self._prep_inputs_solar_pos(weather)
         self._prep_inputs_airmass()
+        self._prep_inputs_albedo(weather)
+        self._prep_inputs_fixed()
 
-        # PVSystem.get_irradiance and SingleAxisTracker.get_irradiance
-        # and PVSystem.get_aoi and SingleAxisTracker.get_aoi
-        # have different method signatures. Use partial to handle
-        # the differences.
-        if isinstance(self.system, SingleAxisTracker):
-            self._prep_inputs_tracking()
-            get_irradiance = partial(
-                self.system.get_irradiance,
-                self.results.tracking['surface_tilt'],
-                self.results.tracking['surface_azimuth'],
-                self.results.solar_position['apparent_zenith'],
-                self.results.solar_position['azimuth'])
-        else:
-            self._prep_inputs_fixed()
-            get_irradiance = partial(
-                self.system.get_irradiance,
-                self.results.solar_position['apparent_zenith'],
-                self.results.solar_position['azimuth'])
-
-        self.results.total_irrad = get_irradiance(
+        self.results.total_irrad = self.system.get_irradiance(
+            self.results.solar_position['apparent_zenith'],
+            self.results.solar_position['azimuth'],
             _tuple_from_dfs(self.results.weather, 'dni'),
             _tuple_from_dfs(self.results.weather, 'ghi'),
             _tuple_from_dfs(self.results.weather, 'dhi'),
+            albedo=self.results.albedo,
             airmass=self.results.airmass['airmass_relative'],
             model=self.transposition_model
         )
@@ -1573,7 +1474,7 @@ class ModelChain:
         data : DataFrame, or tuple or list of DataFrame
             Contains plane-of-array irradiance data. Required column names
             include ``'poa_global'``, ``'poa_direct'`` and ``'poa_diffuse'``.
-            Columns with weather-related data are ssigned to the
+            Columns with weather-related data are assigned to the
             ``weather`` attribute.  If columns for ``'temp_air'`` and
             ``'wind_speed'`` are not provided, air temperature of 20 C and wind
             speed of 0 m/s are assumed.
@@ -1607,10 +1508,7 @@ class ModelChain:
         self._prep_inputs_solar_pos(data)
         self._prep_inputs_airmass()
 
-        if isinstance(self.system, SingleAxisTracker):
-            self._prep_inputs_tracking()
-        else:
-            self._prep_inputs_fixed()
+        self._prep_inputs_fixed()
 
         return self
 
@@ -1657,7 +1555,7 @@ class ModelChain:
             self.temperature_model()
         return self
 
-    def _prepare_temperature(self, data=None):
+    def _prepare_temperature(self, data):
         """
         Sets cell_temperature using inputs in data and the specified
         temperature model.
@@ -1670,7 +1568,7 @@ class ModelChain:
 
         Parameters
         ----------
-        data : DataFrame, default None
+        data : DataFrame
             May contain columns ``'cell_temperature'`` or
             ``'module_temperaure'``.
 
@@ -1724,16 +1622,32 @@ class ModelChain:
         Parameters
         ----------
         weather : DataFrame, or tuple or list of DataFrame
-            Irradiance column names must include ``'dni'``, ``'ghi'``, and
-            ``'dhi'``. If optional columns ``'temp_air'`` and ``'wind_speed'``
+            Column names must include:
+
+            - ``'dni'``
+            - ``'ghi'``
+            - ``'dhi'``
+
+            Optional columns are:
+
+            - ``'temp_air'``
+            - ``'cell_temperature'``
+            - ``'module_temperature'``
+            - ``'wind_speed'``
+            - ``'albedo'``
+
+            If optional columns ``'temp_air'`` and ``'wind_speed'``
             are not provided, air temperature of 20 C and wind speed of 0 m/s
             are added to the DataFrame. If optional column
             ``'cell_temperature'`` is provided, these values are used instead
-            of `temperature_model`. If optional column `module_temperature`
-            is provided, `temperature_model` must be ``'sapm'``.
+            of `temperature_model`. If optional column ``'module_temperature'``
+            is provided, ``temperature_model`` must be ``'sapm'``.
 
-            If list or tuple, must be of the same length and order as the
-            Arrays of the ModelChain's PVSystem.
+            If optional column ``'albedo'`` is provided, ``'albedo'`` may not
+            be present on the ModelChain's PVSystem.Arrays.
+
+            If weather is a list or tuple, it must be of the same length and
+            order as the Arrays of the ModelChain's PVSystem.
 
         Returns
         -------
@@ -1833,13 +1747,13 @@ class ModelChain:
 
         return self
 
-    def _run_from_effective_irrad(self, data=None):
+    def _run_from_effective_irrad(self, data):
         """
         Executes the temperature, DC, losses and AC models.
 
         Parameters
         ----------
-        data : DataFrame, or tuple of DataFrame, default None
+        data : DataFrame, or tuple of DataFrame
             If optional column ``'cell_temperature'`` is provided, these values
             are used instead of `temperature_model`. If optional column
             `module_temperature` is provided, `temperature_model` must be
@@ -1862,7 +1776,7 @@ class ModelChain:
 
         return self
 
-    def run_model_from_effective_irradiance(self, data=None):
+    def run_model_from_effective_irradiance(self, data):
         """
         Run the model starting with effective irradiance in the plane of array.
 
@@ -1942,7 +1856,7 @@ def _irrad_for_celltemp(total_irrad, effective_irradiance):
 
     """
     if isinstance(total_irrad, tuple):
-        if all(['poa_global' in df for df in total_irrad]):
+        if all('poa_global' in df for df in total_irrad):
             return _tuple_from_dfs(total_irrad, 'poa_global')
         else:
             return effective_irradiance

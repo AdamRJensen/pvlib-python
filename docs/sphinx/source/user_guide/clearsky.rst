@@ -216,25 +216,26 @@ wavelengths [Bir80]_, and is implemented in
 
     In [1]: tmy_file = os.path.join(pvlib_data, '703165TY.csv')  # TMY file
 
-    In [1]: tmy_data, tmy_header = read_tmy3(tmy_file, coerce_year=1999)  # read TMY data
+    In [1]: tmy_data, tmy_header = read_tmy3(tmy_file, coerce_year=1999, map_variables=True)
 
     In [1]: tl_historic = clearsky.lookup_linke_turbidity(time=tmy_data.index,
        ...:     latitude=tmy_header['latitude'], longitude=tmy_header['longitude'])
 
     In [1]: solpos = solarposition.get_solarposition(time=tmy_data.index,
        ...:     latitude=tmy_header['latitude'], longitude=tmy_header['longitude'],
-       ...:     altitude=tmy_header['altitude'], pressure=tmy_data['Pressure']*mbars,
-       ...:     temperature=tmy_data['DryBulb'])
+       ...:     altitude=tmy_header['altitude'], pressure=tmy_data['pressure']*mbars,
+       ...:     temperature=tmy_data['temp_air'])
 
     In [1]: am_rel = atmosphere.get_relative_airmass(solpos.apparent_zenith)
 
-    In [1]: am_abs = atmosphere.get_absolute_airmass(am_rel, tmy_data['Pressure']*mbars)
+    In [1]: am_abs = atmosphere.get_absolute_airmass(am_rel, tmy_data['pressure']*mbars)
 
     In [1]: airmass = pd.concat([am_rel, am_abs], axis=1).rename(
        ...:     columns={0: 'airmass_relative', 1: 'airmass_absolute'})
 
     In [1]: tl_calculated = atmosphere.kasten96_lt(
-       ...:     airmass.airmass_absolute, tmy_data['Pwat'], tmy_data['AOD'])
+       ...:     airmass.airmass_absolute, tmy_data['precipitable_water'],
+       ...:     tmy_data['AOD (unitless)'])
 
     In [1]: tl = pd.concat([tl_historic, tl_calculated], axis=1).rename(
        ...:     columns={0:'Historic', 1:'Calculated'})
@@ -343,15 +344,6 @@ Validation
 
 See [Ine02]_, [Ren12]_.
 
-Will Holmgren compared pvlib's Ineichen model and climatological
-turbidity to `SoDa's McClear service
-<http://www.soda-pro.com/web-services/radiation/cams-mcclear>`_ in
-Arizona. Here are links to an
-`ipynb notebook
-<https://forecasting.energy.arizona.edu/media/ineichen_vs_mcclear.ipynb>`_
-and its `html rendering
-<https://forecasting.energy.arizona.edu/media/ineichen_vs_mcclear.html>`_.
-
 
 .. _simplified_solis:
 
@@ -369,14 +361,13 @@ Aerosol and precipitable water data
 There are a number of sources for aerosol and precipitable water data
 of varying accuracy, global coverage, and temporal resolution.
 Ground based aerosol data can be obtained from
-`Aeronet <http://aeronet.gsfc.nasa.gov>`_. Precipitable water can be obtained
-from `radiosondes <http://weather.uwyo.edu/upperair/sounding.html>`_,
-`ESRL GPS-MET <http://gpsmet.noaa.gov/cgi-bin/gnuplots/rti.cgi>`_, or
+`Aeronet <http://aeronet.gsfc.nasa.gov>`_. Precipitable water can be
 derived from surface relative humidity using functions such as
 :py:func:`pvlib.atmosphere.gueymard94_pw`.
 Numerous gridded products from satellites, weather models, and climate models
 contain one or both of aerosols and precipitable water. Consider data
-from the `ECMWF <https://software.ecmwf.int/wiki/display/WEBAPI/Access+ECMWF+Public+Datasets>`_
+from the `ECMWF ERA5 <https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5>`_,
+`NASA MERRA-2 <https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2/>`_,
 and `SoDa <http://www.soda-pro.com/web-services/radiation/cams-mcclear>`_.
 
 Aerosol optical depth (AOD) is a function of wavelength, and the Simplified
@@ -575,9 +566,6 @@ Validation
 
 See [Ine16]_.
 
-We encourage users to compare the pvlib implementation to Ineichen's
-`Excel tool <http://www.unige.ch/energie/fr/equipe/ineichen/solis-tool/>`_.
-
 .. _detect_clearsky:
 
 Detect Clearsky
@@ -640,7 +628,7 @@ Now we run the synthetic data and clear sky estimate through the
 
 .. ipython:: python
 
-    clear_samples = clearsky.detect_clearsky(ghi, cs['ghi'], cs.index, 10)
+    clear_samples = clearsky.detect_clearsky(ghi, cs['ghi'])
 
     fig, ax = plt.subplots()
 

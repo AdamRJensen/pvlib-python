@@ -15,15 +15,7 @@ from numpy.testing import assert_almost_equal
 import pandas as pd
 
 import unittest
-import pytest
-
-
-try:
-    from numba import __version__ as numba_version
-    numba_version_int = int(numba_version.split('.')[0] +
-                            numba_version.split('.')[1])
-except ImportError:
-    numba_version_int = 0
+from .conftest import requires_numba
 
 
 times = (pd.date_range('2003-10-17 12:30:30', periods=1, freq='D')
@@ -154,13 +146,12 @@ class SpaBase:
     def test_moon_ascending_longitude(self):
         assert_almost_equal(X4, self.spa.moon_ascending_longitude(JCE), 6)
 
-    def test_longitude_nutation(self):
-        assert_almost_equal(dPsi, self.spa.longitude_nutation(
-            JCE, X0, X1, X2, X3, X4), 6)
-
-    def test_obliquity_nutation(self):
-        assert_almost_equal(dEpsilon, self.spa.obliquity_nutation(
-            JCE, X0, X1, X2, X3, X4), 6)
+    def test_longitude_obliquity_nutation(self):
+        out = np.empty((2,))
+        self.spa.longitude_obliquity_nutation(JCE, X0, X1, X2, X3, X4, out)
+        _dPsi, _dEpsilon = out[0], out[1]
+        assert_almost_equal(dPsi, _dPsi, 6)
+        assert_almost_equal(dEpsilon, _dEpsilon, 6)
 
     def test_mean_ecliptic_obliquity(self):
         assert_almost_equal(epsilon0, self.spa.mean_ecliptic_obliquity(JME), 6)
@@ -243,7 +234,7 @@ class SpaBase:
 
     def test_solar_position(self):
         with warnings.catch_warnings():
-            # don't warn on method reload or num threads
+            # don't warn on method reload
             warnings.simplefilter("ignore")
             spa_out_0 = self.spa.solar_position(
                 unixtimes, lat, lon, elev, pressure, temp, delta_t,
@@ -391,17 +382,15 @@ class NumpySpaTest(unittest.TestCase, SpaBase):
         assert_almost_equal(JD, self.spa.julian_day(unixtimes)[0], 6)
 
 
-@pytest.mark.skipif(numba_version_int < 17,
-                    reason='Numba not installed or version not >= 0.17.0')
+@requires_numba
 class NumbaSpaTest(unittest.TestCase, SpaBase):
     """Import spa, compiling to numba, and run tests"""
     @classmethod
     def setUpClass(self):
         os.environ['PVLIB_USE_NUMBA'] = '1'
-        if numba_version_int >= 17:
-            import pvlib.spa as spa
-            spa = reload(spa)
-            self.spa = spa
+        import pvlib.spa as spa
+        spa = reload(spa)
+        self.spa = spa
 
     @classmethod
     def tearDownClass(self):

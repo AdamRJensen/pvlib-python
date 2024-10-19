@@ -1,10 +1,13 @@
 from pvlib.version import __version__  # noqa: F401
 
 from pvlib import (  # noqa: F401
+    # list spectrum first so it's available for atmosphere & pvsystem (GH 1628)
+    spectrum,
+
+    albedo,
     atmosphere,
     bifacial,
     clearsky,
-    # forecast
     iam,
     inverter,
     iotools,
@@ -12,6 +15,7 @@ from pvlib import (  # noqa: F401
     ivtools,
     location,
     modelchain,
+    pvarray,
     pvsystem,
     scaling,
     shading,
@@ -20,7 +24,6 @@ from pvlib import (  # noqa: F401
     soiling,
     solarposition,
     spa,
-    spectrum,
     temperature,
     tools,
     tracking,

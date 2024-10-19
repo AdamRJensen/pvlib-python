@@ -19,6 +19,23 @@ import pvlib  # used to avoid dni name collision in complete_irradiance
 from pvlib._deprecation import pvlibDeprecationWarning
 import warnings
 
+# see References section of get_ground_diffuse function
+SURFACE_ALBEDOS = {'urban': 0.18,
+                   'grass': 0.20,
+                   'fresh grass': 0.26,
+                   'soil': 0.17,
+                   'sand': 0.40,
+                   'snow': 0.65,
+                   'fresh snow': 0.75,
+                   'asphalt': 0.12,
+                   'concrete': 0.30,
+                   'aluminum': 0.85,
+                   'copper': 0.74,
+                   'fresh steel': 0.35,
+                   'dirty steel': 0.08,
+                   'sea': 0.06
+
+}
 
 # Deprecation warning based on https://peps.python.org/pep-0562/
 def __getattr__(attr):
@@ -28,7 +45,6 @@ def __getattr__(attr):
                       pvlibDeprecationWarning)
         return pvlib.albedo.SURFACE_ALBEDOS
     raise AttributeError(f"module {__name__!r} has no attribute {attr!r}")
-
 
 def get_extra_radiation(datetime_or_doy, solar_constant=1366.1,
                         method='spencer', epoch_year=2014, **kwargs):
@@ -488,7 +504,9 @@ def poa_components(aoi, dni, poa_sky_diffuse, poa_ground_diffuse):
 
     Notes
     ------
-    Negative beam irradiation due to aoi :math:`> 90^{\circ}` or AOI
+    Negative beam irradiation due to aoi :math:`
+    
+    90^{\circ}` or AOI
     :math:`< 0^{\circ}` is set to zero.
     '''
 

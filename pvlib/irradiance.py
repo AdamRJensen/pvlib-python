@@ -29,6 +29,7 @@ SURFACE_ALBEDOS = {'urban': 0.18,
                    'fresh steel': 0.35,
                    'dirty steel': 0.08,
                    'sea': 0.06
+
 }
 
 

@@ -45,7 +45,6 @@ def __getattr__(attr):
                       pvlibDeprecationWarning)
         return pvlib.albedo.SURFACE_ALBEDOS
     raise AttributeError(f"module {__name__!r} has no attribute {attr!r}")
-  
 
 def get_extra_radiation(datetime_or_doy, solar_constant=1366.1,
                         method='spencer', epoch_year=2014, **kwargs):

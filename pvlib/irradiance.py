@@ -506,6 +506,7 @@ def poa_components(aoi, dni, poa_sky_diffuse, poa_ground_diffuse):
     ------
     Negative beam irradiation due to aoi :math:`
     
+    
     90^{\circ}` or AOI
     :math:`< 0^{\circ}` is set to zero.
     '''

@@ -81,7 +81,7 @@ Contributing
 ============
 
 We need your help to make pvlib-python a great tool!
-Please see the [Contributing page](http://pvlib-python.readthedocs.io/en/stable/contributing.html) for more on how you can contribute.
+Please see the [Contributing page](https://pvlib-python.readthedocs.io/en/stable/contributing/index.html) for more on how you can contribute.
 The long-term success of pvlib-python requires substantial community support.
 
 
@@ -145,9 +145,8 @@ BSD 3-clause.
 History and acknowledgement
 ===========================
 
-pvlib python started out as a Python translation of the PVLIB MATLAB
-toolbox (developed by the [PVPMC](https://pvpmc.sandia.gov/) at
-Sandia National Laboratories) in 2013 and has grown substantially since then.
+pvlib python began in 2013 as a Python translation of the [PVLIB for Matlab](https://github.com/sandialabs/MATLAB_PV_LIB)
+toolbox developed by Sandia National Laboratories. pvlib python has grown substantially since then.
 Today it contains code contributions from over a hundred individuals worldwide
 and is maintained by a core group of PV modelers from a variety of institutions.
 

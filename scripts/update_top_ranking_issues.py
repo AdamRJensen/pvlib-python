@@ -48,7 +48,9 @@ for i, issue in enumerate(issues):
         break
 
 # edit top issues
-top_issues_card: Issue = repository.get_issue(number=2196)
+repo_name_local: str = "adamrjensen/pvlib-python"
+repository_local: Repository = github.get_repo(repo_name_local)
+top_issues_card: Issue = repository_local.get_issue(number=3)
 header = "Top Ranking Issues"
 new_body = header + "\n" + "\n".join(ranked_issues)
 top_issues_card.edit(

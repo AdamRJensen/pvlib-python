@@ -32,6 +32,8 @@ class SeasonalTiltMount(pvsystem.AbstractMount):
     surface_azimuth: float = 180.0
 
     def get_orientation(self, solar_zenith, solar_azimuth):
+        # note: determining tilt based on month may produce different
+        # results depending on the time zone of the timestamps
         tilts = [self.monthly_tilts[m-1] for m in solar_zenith.index.month]
         return pd.DataFrame({
             'surface_tilt': tilts,
@@ -44,12 +46,13 @@ class SeasonalTiltMount(pvsystem.AbstractMount):
 # like we expect:
 
 DATA_DIR = pathlib.Path(pvlib.__file__).parent / 'data'
-tmy, metadata = iotools.read_tmy3(DATA_DIR / '723170TYA.CSV', coerce_year=1990)
+tmy, metadata = iotools.read_tmy3(DATA_DIR / '723170TYA.CSV', coerce_year=1990,
+                                  map_variables=True)
 # shift from TMY3 right-labeled index to left-labeled index:
 tmy.index = tmy.index - pd.Timedelta(hours=1)
 weather = pd.DataFrame({
-    'ghi': tmy['GHI'], 'dhi': tmy['DHI'], 'dni': tmy['DNI'],
-    'temp_air': tmy['DryBulb'], 'wind_speed': tmy['Wspd'],
+    'ghi': tmy['ghi'], 'dhi': tmy['dhi'], 'dni': tmy['dni'],
+    'temp_air': tmy['temp_air'], 'wind_speed': tmy['wind_speed'],
 })
 loc = location.Location.from_tmy(metadata)
 solpos = loc.get_solarposition(weather.index)

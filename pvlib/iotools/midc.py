@@ -20,15 +20,21 @@ import pandas as pd
 MIDC_VARIABLE_MAP = {
     'BMS': {
         'Global CMP22 (vent/cor) [W/m^2]': 'ghi',
-        'Direct NIP [W/m^2]': 'dni',
+        'Direct CHP1-1 [W/m^2]': 'dni_chp1',
+        # NIP was mapped to dni for pvlib<=0.10.5
+        'Direct NIP [W/m^2]': 'dni_nip',
         'Diffuse CM22-1 (vent/cor) [W/m^2]': 'dhi',
         'Avg Wind Speed @ 6ft [m/s]': 'wind_speed',
         'Tower Dry Bulb Temp [deg C]': 'temp_air',
         'Tower RH [%]': 'relative_humidity'},
     'UOSMRL': {
         'Global CMP22 [W/m^2]': 'ghi',
-        'Direct NIP [W/m^2]': 'dni',
-        'Diffuse Schenk [W/m^2]': 'dhi',
+        'Direct CHP1 [W/m^2]': 'dni_chp1',
+        'Diffuse [W/m^2]': 'dhi',
+        # NIP was mapped to dni for pvlib<=0.10.5
+        'Direct NIP [W/m^2]': 'dni_nip',
+        # Schenk was mapped to dhi for pvlib<=0.10.5
+        # 'Diffuse Schenk [W/m^2]': 'dhi',
         'Air Temperature [deg C]': 'temp_air',
         'Relative Humidity [%]': 'relative_humidity',
         'Avg Wind Speed @ 10m [m/s]': 'wind_speed'},
@@ -80,18 +86,17 @@ MIDC_VARIABLE_MAP = {
         'Air Temperature [deg C]': 'temp_air',
         'Rel Humidity [%]': 'relative_humidity',
         'Avg Wind Speed @ 3m [m/s]': 'wind_speed'},
-    'VTIF': {
+    'NWTC': {
         'Global Horizontal [W/m^2]': 'ghi',
         'Direct Normal [W/m^2]': 'dni',
         'Diffuse Horizontal [W/m^2]': 'dhi',
-        'Air Temperature [deg C]': 'temp_air',
-        'Avg Wind Speed @ 3m [m/s]': 'wind_speed',
-        'Rel Humidity [%]': 'relative_humidity'},
-    'NWTC': {
-        'Global PSP [W/m^2]': 'ghi',
+        # PSP instrument was removed Feb. 2021
+        # PSP was mapped to ghi for pvlib<=0.10.5
+        # 'Global PSP [W/m^2]': 'ghi',
         'Temperature @ 2m [deg C]': 'temp_air',
         'Avg Wind Speed @ 2m [m/s]': 'wind_speed',
-        'Relative Humidity [%]': 'relative_humidity'}}
+        'Relative Humidity [%]': 'relative_humidity'},
+}
 
 
 # Maps problematic timezones to 'Etc/GMT' for parsing.
@@ -102,7 +107,7 @@ TZ_MAP = {
 }
 
 
-def format_index(data):
+def _format_index(data):
     """Create DatetimeIndex for the Dataframe localized to the timezone provided
     as the label of the second (time) column.
 
@@ -126,7 +131,7 @@ def format_index(data):
     return data
 
 
-def format_index_raw(data):
+def _format_index_raw(data):
     """Create DatetimeIndex for the Dataframe localized to the timezone provided
     as the label of the third column.
 
@@ -200,9 +205,9 @@ def read_midc(filename, variable_map={}, raw_data=False, **kwargs):
     """
     data = pd.read_csv(filename, **kwargs)
     if raw_data:
-        data = format_index_raw(data)
+        data = _format_index_raw(data)
     else:
-        data = format_index(data)
+        data = _format_index(data)
     data = data.rename(columns=variable_map)
     return data
 
@@ -215,9 +220,9 @@ def read_midc_raw_data_from_nrel(site, start, end, variable_map={},
     ----------
     site: string
         The MIDC station id.
-    start: datetime
+    start: datetime-like
         Start date for requested data.
-    end: datetime
+    end: datetime-like
         End date for requested data.
     variable_map: dict
         A dictionary mapping MIDC field names to pvlib names. Used to
@@ -247,8 +252,8 @@ def read_midc_raw_data_from_nrel(site, start, end, variable_map={},
     for more details and considerations.
     """
     args = {'site': site,
-            'begin': start.strftime('%Y%m%d'),
-            'end': end.strftime('%Y%m%d')}
+            'begin': pd.to_datetime(start).strftime('%Y%m%d'),
+            'end': pd.to_datetime(end).strftime('%Y%m%d')}
     url = 'https://midcdmz.nrel.gov/apps/data_api.pl'
     # NOTE: just use requests.get(url, params=args) to build querystring
     # number of header columns and data columns do not always match,

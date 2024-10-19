@@ -246,13 +246,6 @@ You cannot localize a native Python date object.
 pvlib-specific functionality
 ----------------------------
 
-.. note::
-
-    This section applies to pvlib >= 0.3. Version 0.2 of pvlib used a
-    ``Location`` object's ``tz`` attribute to auto-magically correct for
-    some time zone issues. This behavior was counter-intuitive to many
-    users and was removed in version 0.3.
-
 How does this general functionality interact with pvlib? Perhaps the two
 most common places to get tripped up with time and time zone issues in
 solar power analysis occur during data import and solar position
@@ -272,7 +265,7 @@ Let's first examine how pvlib handles time when it imports a TMY3 file.
     # some gymnastics to find the example file
     pvlib_abspath = os.path.dirname(os.path.abspath(inspect.getfile(pvlib)))
     file_abspath = os.path.join(pvlib_abspath, 'data', '703165TY.csv')
-    tmy3_data, tmy3_metadata = pvlib.iotools.read_tmy3(file_abspath)
+    tmy3_data, tmy3_metadata = pvlib.iotools.read_tmy3(file_abspath, map_variables=True)
 
     tmy3_metadata
 
@@ -287,7 +280,7 @@ print just a few of the rows and columns of the large dataframe.
 
     tmy3_data.index.tz
 
-    tmy3_data.loc[tmy3_data.index[0:3], ['GHI', 'DNI', 'AOD']]
+    tmy3_data.loc[tmy3_data.index[0:3], ['ghi', 'dni', 'AOD (unitless)']]
 
 The :py:func:`~pvlib.iotools.read_tmy2` function also returns a DataFrame
 with a localized DatetimeIndex.
@@ -315,9 +308,9 @@ DataFrame's index since the index has been localized.
     ax.set_ylabel('(degrees)');
 
 `According to the US Navy
-<http://aa.usno.navy.mil/rstt/onedaytable?ID=AA&year=1997&month=1&day=1&state=AK&place=sand+point>`_,
-on January 1, 1997 at Sand Point, Alaska, sunrise was at 10:09 am, solar
-noon was at 1:46 pm, and sunset was at 5:23 pm. This is consistent with
+<https://aa.usno.navy.mil/data/RS_OneDay>`_,
+on January 1, 2024 at Sand Point, Alaska (55.34N, -160.5W), sunrise was at 10:09 am, solar
+noon was at 1:46 pm, and sunset was at 5:22 pm. This is consistent with
 the data plotted above (and depressing).
 
 Solar position (assumed UTC)

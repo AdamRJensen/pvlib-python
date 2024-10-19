@@ -25,7 +25,7 @@ def read_epw(filename, coerce_year=None):
     filename : String
         Can be a relative file path, absolute file path, or url.
 
-    coerce_year : None or int, default None
+    coerce_year : int, optional
         If supplied, the year of the data will be set to this value. This can
         be a useful feature because EPW data is composed of data from
         different years.
@@ -225,14 +225,15 @@ def read_epw(filename, coerce_year=None):
             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.87 '
             'Safari/537.36')})
         response = urlopen(request)
-        csvdata = io.StringIO(response.read().decode(errors='ignore'))
+        with io.StringIO(response.read().decode(errors='ignore')) as csvdata:
+            data, meta = parse_epw(csvdata, coerce_year)
+
     else:
         # Assume it's accessible via the file system
-        csvdata = open(str(filename), 'r')
-    try:
-        data, meta = parse_epw(csvdata, coerce_year)
-    finally:
-        csvdata.close()
+        with open(str(filename), 'r') as csvdata:
+            data, meta = parse_epw(csvdata, coerce_year)
+
+
     return data, meta
 
 
@@ -246,7 +247,7 @@ def parse_epw(csvdata, coerce_year=None):
     csvdata : file-like buffer
         a file-like buffer containing data in the EPW format
 
-    coerce_year : None or int, default None
+    coerce_year : int, optional
         If supplied, the year of the data will be set to this value. This can
         be a useful feature because EPW data is composed of data from
         different years.

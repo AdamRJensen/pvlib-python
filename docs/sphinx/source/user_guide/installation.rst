@@ -40,10 +40,6 @@ for pvlib, including Pandas, NumPy, and SciPy.
 #. **Install** the Anaconda Python distribution available at
    `Anaconda.com <https://www.anaconda.com/download/>`_.
 
-See `What is Anaconda? <https://www.anaconda.com/what-is-anaconda/>`_
-and the `Anaconda Documentation <https://docs.anaconda.com/anaconda/>`_
-for more information.
-
 You can now install pvlib-python by one of the methods below.
 
 
@@ -56,18 +52,14 @@ Users may install pvlib-python using either the
 `conda <https://conda.io/docs/>`_ or `pip <https://pip.pypa.io>`_
 package manager. We recommend that most users install pvlib-python
 using the conda package manager in the
-`Anaconda Python distribution <https://www.anaconda.com/what-is-anaconda/>`_.
+Anaconda python distribution.
 To install the most recent stable release of pvlib-python in a
 non-editable way, use one of the following commands to install pvlib-python::
 
-    # get the package from the pvlib conda channel
-    # best option for installing pvlib in the base Anaconda distribution
-    conda install -c pvlib pvlib
-
     # get the package from the conda-forge conda channel
-    # best option if using pvlib.forecast module
     # strongly recommend installing in a separate conda env as shown below
-    conda create -n pvlib -c conda-forge pvlib-python; conda activate pvlib
+    # note: both "pvlib" and "pvlib-python" work on conda-forge
+    conda create -n pvlib -c conda-forge pvlib; conda activate pvlib
 
     # get the package from the Python Package Index
     # best option if you know what you are doing
@@ -75,31 +67,26 @@ non-editable way, use one of the following commands to install pvlib-python::
 
     # get pvlib and optional dependencies from the Python Package Index
     # another option if you know what you are doing
-    pip install pvlib[optional]
+    pip install pvlib[optional]  # on Mac:  pip install "pvlib[optional]"
 
 .. note::
 
     By default, pvlib will not install some infrequently used dependencies.
     If you run into an error such as
-    `ModuleNotFoundError: No module named 'netCDF4'`
+    `ModuleNotFoundError: No module named 'statsmodels'`
     you can either install pvlib with all optional dependencies using
     `pip install pvlib[optional]`, or you can install pvlib from conda-forge
-    `conda create -n pvlib -c conda-forge pvlib-python; conda activate pvlib`.
+    `conda create -n pvlib -c conda-forge pvlib; conda activate pvlib`.
 
 If your system complains that you don't have access privileges or asks
 for a password then you're probably trying to install pvlib into your
 system's Python distribution. This is usually a bad idea and you should
 follow the :ref:`nopython` instructions before installing pvlib.
 
-You may still want to download the Python source code so that you can
-easily get all of the Jupyter Notebook tutorials. Either clone the `git
+You may still want to download the Python source code. Either clone the `git
 repository <https://github.com/pvlib/pvlib-python>`_ or go to the
 `Releases page <https://github.com/pvlib/pvlib-python/releases>`_ to
-download the zip file of the most recent release. You can also use the
-nbviewer website to choose a tutorial to experiment with. Go to our
-`nbviewer tutorial page
-<http://nbviewer.jupyter.org/github/pvlib/pvlib-python/tree/master/docs/
-tutorials/>`_.
+download the zip file of the most recent release.
 
 
 .. _editablelibrary:
@@ -178,7 +165,7 @@ referred to as *conda environments*, but they're the same for our purposes.
    ``conda create --name pvlibdev python pandas scipy``
 #. **Activate** the new conda environment: ``conda activate pvlibdev``
 #. **Install** additional packages into your development environment:
-   ``conda install jupyter ipython matplotlib pytest nose flake8``
+   ``conda install jupyter ipython matplotlib pytest flake8``
 
 The `conda documentation <https://conda.io/docs/index.html>`_ has more
 information on how to use conda virtual environments. You can also add
@@ -228,7 +215,7 @@ pvlib-python is compatible with Python 3.
 
 pvlib-python requires Pandas, Numpy, and SciPy. The minimum version requirements
 are specified in
-`setup.py <https://github.com/pvlib/pvlib-python/blob/master/setup.py>`_.
+`pyproject.toml <https://github.com/pvlib/pvlib-python/blob/main/pyproject.toml>`_.
 They are typically releases from several years ago.
 
 A handful of pvlib-python features require additional packages that must
@@ -238,13 +225,12 @@ include:
 * statsmodels: parameter fitting
 * numba: fastest solar position calculations
 * pyephem: solar positions calculations using an astronomical library
-* siphon: forecasting PV power using the pvlib.forecast module
 
 The Anaconda distribution includes most of the above packages.
 
 Alternatively, users may install all optional dependencies using
 
-    pip install pvlib[optional]
+    pip install pvlib[optional]  # on Mac:  pip install "pvlib[optional]"
 
 
 .. _nrelspa:

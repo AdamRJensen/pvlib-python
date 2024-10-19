@@ -10,7 +10,7 @@ from scipy.special import erf
 from pvlib.tools import cosd
 
 
-def hsu(rainfall, cleaning_threshold, tilt, pm2_5, pm10,
+def hsu(rainfall, cleaning_threshold, surface_tilt, pm2_5, pm10,
         depo_veloc=None, rain_accum_period=pd.Timedelta('1h')):
     """
     Calculates soiling ratio given particulate and rain data using the
@@ -30,7 +30,7 @@ def hsu(rainfall, cleaning_threshold, tilt, pm2_5, pm10,
         Amount of rain in an accumulation period needed to clean the PV
         modules. [mm]
 
-    tilt : float
+    surface_tilt : numeric
         Tilt of the PV panels from horizontal. [degree]
 
     pm2_5 : numeric
@@ -58,7 +58,7 @@ def hsu(rainfall, cleaning_threshold, tilt, pm2_5, pm10,
     -----------
     .. [1] M. Coello and L. Boyle, "Simple Model For Predicting Time Series
        Soiling of Photovoltaic Panels," in IEEE Journal of Photovoltaics.
-       doi: 10.1109/JPHOTOV.2019.2919628
+       :doi:`10.1109/JPHOTOV.2019.2919628`
     .. [2] Atmospheric Chemistry and Physics: From Air Pollution to Climate
        Change. J. Seinfeld and S. Pandis. Wiley and Sons 2001.
 
@@ -83,7 +83,7 @@ def hsu(rainfall, cleaning_threshold, tilt, pm2_5, pm10,
     horiz_mass_rate = (
         pm2_5 * depo_veloc['2_5'] + np.maximum(pm10 - pm2_5, 0.)
         * depo_veloc['10']) * dt_sec
-    tilted_mass_rate = horiz_mass_rate * cosd(tilt)  # assuming no rain
+    tilted_mass_rate = horiz_mass_rate * cosd(surface_tilt)  # assuming no rain
 
     # tms -> tilt_mass_rate
     tms_cumsum = np.cumsum(tilted_mass_rate * np.ones(rainfall.shape))
@@ -91,7 +91,7 @@ def hsu(rainfall, cleaning_threshold, tilt, pm2_5, pm10,
     mass_no_cleaning = pd.Series(index=rainfall.index, data=tms_cumsum)
     # specify dtype so pandas doesn't assume object
     mass_removed = pd.Series(index=rainfall.index, dtype='float64')
-    mass_removed[0] = 0.
+    mass_removed.iloc[0] = 0.
     mass_removed[cleaning_times] = mass_no_cleaning[cleaning_times]
     accum_mass = mass_no_cleaning - mass_removed.ffill()
 
@@ -128,7 +128,7 @@ def kimber(rainfall, cleaning_threshold=6, soiling_loss_rate=0.0015,
     max_soiling : float, default 0.3
         Maximum fraction of energy lost due to soiling. Soiling will build up
         until this value. [unitless]
-    manual_wash_dates : sequence or None, default None
+    manual_wash_dates : sequence, optional
         List or tuple of dates as Python ``datetime.date`` when the panels were
         washed manually. Note there is no grace period after a manual wash, so
         soiling begins to build up immediately.

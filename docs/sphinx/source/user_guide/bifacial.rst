@@ -15,7 +15,7 @@ surfaces.
 pvlib-python provides two groups of functions for estimating front and back
 irradiance:
 
-1. a wrapper for convenient use of the pvfactors package:
+1. a wrapper for convenient use of the pvfactors model:
 :py:func:`~pvlib.bifacial.pvfactors.pvfactors_timeseries`
 
 2. the infinite sheds bifacial model:
@@ -26,12 +26,25 @@ irradiance:
 pvfactors
 ---------
 
-The `pvfactors <https://sunpower.github.io/pvfactors/>`_ package calculates
+The pvfactors model calculates
 incident irradiance on the front and back surfaces of an array. pvfactors uses
 a 2D geometry which assumes that the array is made up of long, regular rows.
 Irradiance is calculated in the middle of a row; end-of-row effects are not
 included. pvfactors can model arrays in fixed racking or on single-axis
-trackers.
+trackers with a user-configurable number of rows.
+
+Prior to pvlib version 0.10.1, pvlib used the original SunPower implementation
+of the model via the `pvfactors <https://github.com/sunpower/pvfactors>`_
+package.  Starting in version 0.10.1, pvlib instead uses
+`solarfactors <https://github.com/pvlib/solarfactors>`_, a drop-in
+replacement implementation maintained by the pvlib community.
+This switch was made when the original ``pvfactors`` package became
+difficult to install in modern python environments.
+``solarfactors`` implements the same model as ``pvfactors`` and is kept
+up to date and working over time.  Note that "solarfactors" is only the name
+on PyPI (meaning it is installed via ``pip install solarfactors``);
+after installation, Python code still accesses it as "pvfactors"
+(e.g. ``import pvfactors``).
 
 
 Infinite Sheds
@@ -83,6 +96,7 @@ Array geometry is defined by the following:
     - height of row center above ground, ``height``.
     - tilt of the row from horizontal, ``surface_tilt``.
     - azimuth of the row's normal vector, ``surface_azimuth``.
+
 View factors from the ground to the sky are calculated at points spaced along
 a one-dimensional axis on the ground, with the origin under the center of a
 row and the positive direction toward the right. The positive direction is
@@ -90,7 +104,15 @@ considered to be towards the "front" of the array. Array height differs in this
 code from the description in [1], where array height is described at the row's
 lower edge.
 
+If ``model='isotropic'`` (the default), ``dhi`` is assumed to be isotropically
+distributed across the sky dome as in [1]_. This implementation provides an
+optional extension to [1]_ to model sky anisotropy: if ``model='haydavies'``,
+the input ``dhi`` is decomposed into circumsolar and isotropic components using
+:py:func:`~pvlib.irradiance.haydavies`, with the circumsolar component treated
+as additional ``dni`` for transposition and shading purposes.
+
 This model is influenced by the 2D model published by Marion, *et al.* in [2].
+
 
 References
 ----------

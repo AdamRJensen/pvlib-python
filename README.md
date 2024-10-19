@@ -7,17 +7,17 @@
     <a href="https://pypi.org/project/pvlib/">
     <img src="https://img.shields.io/pypi/v/pvlib.svg" alt="latest release" />
     </a>
-    <a href="https://anaconda.org/conda-forge/pvlib-python">
-    <img src="https://anaconda.org/conda-forge/pvlib-python/badges/version.svg" />
+    <a href="https://anaconda.org/conda-forge/pvlib">
+    <img src="https://anaconda.org/conda-forge/pvlib/badges/version.svg" />
     </a>
-    <a href="https://anaconda.org/conda-forge/pvlib-python">
-    <img src="https://anaconda.org/conda-forge/pvlib-python/badges/latest_release_date.svg" />
+    <a href="https://anaconda.org/conda-forge/pvlib">
+    <img src="https://anaconda.org/conda-forge/pvlib/badges/latest_release_date.svg" />
     </a>
 </tr>
 <tr>
   <td>License</td>
   <td>
-    <a href="https://github.com/pvlib/pvlib-python/blob/master/LICENSE">
+    <a href="https://github.com/pvlib/pvlib-python/blob/main/LICENSE">
     <img src="https://img.shields.io/pypi/l/pvlib.svg" alt="license" />
     </a>
 </td>
@@ -28,29 +28,18 @@
     <a href="http://pvlib-python.readthedocs.org/en/stable/">
     <img src="https://readthedocs.org/projects/pvlib-python/badge/?version=stable" alt="documentation build status" />
     </a>
-    <a href="https://github.com/pvlib/pvlib-python/actions/workflows/pytest.yml?query=branch%3Amaster">
-      <img src="https://github.com/pvlib/pvlib-python/actions/workflows/pytest.yml/badge.svg?branch=master" alt="GitHub Actions Testing Status" />
+    <a href="https://github.com/pvlib/pvlib-python/actions/workflows/pytest.yml?query=branch%3Amain">
+      <img src="https://github.com/pvlib/pvlib-python/actions/workflows/pytest.yml/badge.svg?branch=main" alt="GitHub Actions Testing Status" />
     </a>
     <a href="https://codecov.io/gh/pvlib/pvlib-python">
-    <img src="https://codecov.io/gh/pvlib/pvlib-python/branch/master/graph/badge.svg" alt="codecov coverage" />
-    </a>
-  </td>
-</tr>
-<tr>
-  <td>Code Quality</td>
-  <td>
-    <a href="https://lgtm.com/projects/g/pvlib/pvlib-python/context:python">
-    <img src="https://img.shields.io/lgtm/grade/python/g/pvlib/pvlib-python.svg?logo=lgtm&logoWidth=18" alt="lgtm quality grade" />
-    </a>
-    <a href="https://lgtm.com/projects/g/pvlib/pvlib-python/alerts">
-    <img src="https://img.shields.io/lgtm/alerts/g/pvlib/pvlib-python.svg?logo=lgtm&logoWidth=18" alt="lgtm alters" />
+    <img src="https://codecov.io/gh/pvlib/pvlib-python/branch/main/graph/badge.svg" alt="codecov coverage" />
     </a>
   </td>
 </tr>
 <tr>
   <td>Benchmarks</td>
   <td>
-    <a href="https://pvlib-benchmarker.github.io/pvlib-benchmarks/">
+    <a href="https://pvlib.github.io/pvlib-benchmarks/">
     <img src="https://img.shields.io/badge/benchmarks-asv-lightgrey" />
     </a>
   </td>
@@ -61,40 +50,25 @@
     <a href="https://doi.org/10.5281/zenodo.593284">
     <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.593284.svg" alt="zenodo reference">
     </a>
-    <a href="http://joss.theoj.org/papers/41187535cad22dd4b076c89b72f874b1">
-    <img src="http://joss.theoj.org/papers/41187535cad22dd4b076c89b72f874b1/status.svg" alt="JOSS reference" />
-    </a>
-  </td>
-</tr>
-<tr>
-  <td>Downloads</td>
-  <td>
-    <a href="https://pypi.org/project/pvlib/">
-    <img src="https://img.shields.io/pypi/dm/pvlib" alt="PyPI downloads" />
-    </a>
-    <a href="https://anaconda.org/conda-forge/pvlib-python">
-    <img src="https://anaconda.org/conda-forge/pvlib-python/badges/downloads.svg" alt="conda-forge downloads" />
+    <a style="border-width:0" href="https://doi.org/10.21105/joss.05994">
+    <img src="https://joss.theoj.org/papers/10.21105/joss.05994/status.svg" alt="DOI badge" >
     </a>
   </td>
 </tr>
 </table>
 
 
-pvlib python is a community supported tool that provides a set of
+pvlib python is a community developed toolbox that provides a set of
 functions and classes for simulating the performance of photovoltaic
-energy systems. pvlib python was originally ported from the PVLIB MATLAB
-toolbox developed at Sandia National Laboratories and it implements many
-of the models and methods developed at the Labs. More information on
-Sandia Labs PV performance modeling programs can be found at
-https://pvpmc.sandia.gov/. We collaborate with the PVLIB MATLAB project,
-but operate independently of it.
+energy systems and accomplishing related tasks.  The core mission of pvlib python is to provide open,
+reliable, interoperable, and benchmark implementations of PV system models.
 
 
 Documentation
 =============
 
-Full documentation can be found at [readthedocs](http://pvlib-python.readthedocs.io/en/stable/).
-
+Full documentation can be found at [readthedocs](http://pvlib-python.readthedocs.io/en/stable/),
+including an [FAQ](http://pvlib-python.readthedocs.io/en/stable/user_guide/faq.html) page.
 
 Installation
 ============
@@ -107,23 +81,38 @@ Contributing
 ============
 
 We need your help to make pvlib-python a great tool!
-Please see the [Contributing page](http://pvlib-python.readthedocs.io/en/stable/contributing.html) for more on how you can contribute.
+Please see the [Contributing page](https://pvlib-python.readthedocs.io/en/stable/contributing/index.html) for more on how you can contribute.
 The long-term success of pvlib-python requires substantial community support.
 
 
 Citing
 ======
 
-If you use pvlib-python in a published work, please cite:
+Many of the contributors to pvlib python work in institutions where
+citation metrics are used in performance or career evaluations. If you
+use pvlib python in a published work, please cite:
 
-  William F. Holmgren, Clifford W. Hansen, and Mark A. Mikofski.
+**Recommended citation for the pvlib python project**
+
+  Anderson, K., Hansen, C., Holmgren, W., Jensen, A., Mikofski, M., and Driesse, A.
+  "pvlib python: 2023 project update."
+  Journal of Open Source Software, 8(92), 5994, (2023).
+  https://doi.org/10.21105/joss.05994
+
+
+**Recommended citation for pvlib iotools**
+
+  Jensen, A., Anderson, K., Holmgren, W., Mikofski, M., Hansen, C., Boeman, L., Loonen, R.
+  "pvlib iotools —- Open-source Python functions for seamless access to solar irradiance data."
+  Solar Energy, 266, 112092, (2023).
+  https://doi.org/10.1016/j.solener.2023.112092
+
+**Historical citation for pvlib python**
+
+  Holmgren, W., Hansen, C., and Mikofski, M.
   "pvlib python: a python package for modeling solar energy systems."
   Journal of Open Source Software, 3(29), 884, (2018).
   https://doi.org/10.21105/joss.00884
-
-Please also cite the DOI corresponding to the specific version of
-pvlib-python that you used. pvlib-python DOIs are listed at
-[Zenodo.org](https://zenodo.org/search?page=1&size=20&q=conceptrecid:593284&all_versions&sort=-version)
 
 If you use pvlib-python in a commercial or publicly-available application, please
 consider displaying one of the "powered by pvlib" logos:
@@ -151,6 +140,19 @@ License
 =======
 
 BSD 3-clause.
+
+
+History and acknowledgement
+===========================
+
+pvlib python began in 2013 as a Python translation of the [PVLIB for Matlab](https://github.com/sandialabs/MATLAB_PV_LIB)
+toolbox developed by Sandia National Laboratories. pvlib python has grown substantially since then.
+Today it contains code contributions from over a hundred individuals worldwide
+and is maintained by a core group of PV modelers from a variety of institutions.
+
+pvlib has been supported directly and indirectly by DOE, NumFOCUS, and
+Google Summer of Code funding, university research projects,
+companies that allow their employees to contribute, and from personal time.
 
 
 NumFOCUS

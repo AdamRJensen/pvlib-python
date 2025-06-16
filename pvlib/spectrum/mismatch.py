@@ -112,6 +112,9 @@ def calc_spectral_mismatch_field(sr, e_sun, e_ref=None):
     return smm
 
 
+
+# here is a comment
+
 def spectral_factor_firstsolar(precipitable_water, airmass_absolute,
                                module_type=None, coefficients=None,
                                min_precipitable_water=0.1,
